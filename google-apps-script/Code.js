@@ -1272,17 +1272,17 @@ function formatTelegramCard(idea) {
   }[idea.status] || "💡";
 
   let text = `<b>${statusEmoji} Ý TƯỞNG #${idea.id}: ${escapeHtml(idea.title)}</b>\n\n` +
-    `👤 Đề xuất bởi: ${idea.username}\n` +
-    `📂 Thể loại: <i>${idea.category}</i>\n` +
+    `👤 Đề xuất bởi: ${escapeHtml(idea.username)}\n` +
+    `📂 Thể loại: <i>${escapeHtml(idea.category)}</i>\n` +
     `📝 Mô tả: ${escapeHtml(idea.description)}\n` +
     `📊 Lượt bình chọn: <b>${idea.votes}</b> vote(s)\n` +
-    `📍 Trạng thái: <b>${idea.status}</b>\n`;
+    `📍 Trạng thái: <b>${escapeHtml(idea.status)}</b>\n`;
 
   if (idea.devUsername) {
-    text += `🛠 Phụ trách: <b>${idea.devUsername}</b> (Mốc: ${idea.milestones || "0%"})\n`;
+    text += `🛠 Phụ trách: <b>${escapeHtml(idea.devUsername)}</b> (Mốc: ${escapeHtml(idea.milestones || "0%")})\n`;
   }
   if (idea.bountySummary) {
-    text += `✨ ${idea.bountySummary}\n`;
+    text += `✨ ${escapeHtml(idea.bountySummary)}\n`;
   }
   return text;
 }
@@ -1376,7 +1376,9 @@ function sendTelegramMessage(chatId, text, replyToMsgId, replyMarkup) {
     disable_web_page_preview: true
   };
   if (replyToMsgId) payload.reply_to_message_id = replyToMsgId;
-  if (replyMarkup) payload.reply_markup = JSON.stringify(replyMarkup);
+  if (replyMarkup) {
+    payload.reply_markup = (typeof replyMarkup === "string") ? JSON.parse(replyMarkup) : replyMarkup;
+  }
   return callTelegramApi("sendMessage", payload);
 }
 
@@ -1384,7 +1386,7 @@ function editMessageReplyMarkup(chatId, messageId, replyMarkup) {
   const payload = {
     chat_id: chatId,
     message_id: messageId,
-    reply_markup: JSON.stringify(replyMarkup)
+    reply_markup: (typeof replyMarkup === "string") ? JSON.parse(replyMarkup) : replyMarkup
   };
   return callTelegramApi("editMessageReplyMarkup", payload);
 }
