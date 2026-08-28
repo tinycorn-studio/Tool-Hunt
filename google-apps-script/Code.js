@@ -548,19 +548,33 @@ function doGet(e) {
 // 8. REST API: POST ROUTER & WEBHOOK (doPost)
 // ==============================================================================
 function doPost(e) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(15000);
-  } catch (err) {
-    Logger.log("Không thể lấy Lock: " + err.message);
-  }
-
   try {
     if (!e || !e.postData || !e.postData.contents) {
       return createJsonResponse({ ok: false, error: "Không có dữ liệu gửi đến" });
     }
 
     const contents = JSON.parse(e.postData.contents);
+
+    // 🛡️ ANTI-DUPLICATE WEBHOOK RETRY GUARD:
+    // Nếu Telegram retry gửi lại cùng 1 update_id, lập tức bỏ qua và phản hồi ngay để dập tắt spam!
+    if (contents.update_id) {
+      try {
+        const cache = CacheService.getScriptCache();
+        if (cache) {
+          const cacheKey = "tg_upd_" + contents.update_id;
+          if (cache.get(cacheKey)) {
+            return createJsonResponse({ ok: true });
+          }
+          cache.put(cacheKey, "1", 300);
+        }
+      } catch (cacheErr) {}
+    }
+
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+    } catch (err) {}
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     // 8.A. Yêu cầu API từ Web Dashboard / Mini App
@@ -583,7 +597,7 @@ function doPost(e) {
     return createJsonResponse({ ok: false, error: err.message });
   } finally {
     try {
-      lock.releaseLock();
+      LockService.getScriptLock().releaseLock();
     } catch (e) {}
   }
 }
