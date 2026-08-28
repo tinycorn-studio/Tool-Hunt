@@ -1,0 +1,32 @@
+{
+  "name": "tool-hunt",
+  "version": "2.0.0",
+  "description": "ToolHunt - Hệ thống đề xuất & bình chọn ý tưởng tool cộng đồng trên Telegram tích hợp Google Sheets & Mini App",
+  "main": "google-apps-script/Code.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tinycorn-studio/Tool-Hunt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tinycorn-studio/Tool-Hunt/issues"
+  },
+  "homepage": "https://github.com/tinycorn-studio/Tool-Hunt#readme",
+  "scripts": {
+    "test": "node scripts/test_simulator.js",
+    "setup": "node scripts/setup_webhook.js",
+    "setup:py": "python scripts/setup_webhook.py",
+    "dashboard": "npx serve web-dashboard -p 3000"
+  },
+  "keywords": [
+    "tool-hunt",
+    "telegram-bot",
+    "google-sheets",
+    "google-apps-script",
+    "telegram-mini-app",
+    "upvote-system",
+    "community-ideas",
+    "serverless"
+  ],
+  "author": "Tinycorn Studio",
+  "license": "MIT"
+}
