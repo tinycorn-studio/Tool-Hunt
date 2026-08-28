@@ -582,9 +582,10 @@ function doPost(e) {
       return handleApiPostRequest(contents, ss);
     }
 
-    // 8.B. Webhook Telegram Bot
-    if (contents.message) {
-      handleTelegramMessage(contents.message, ss);
+    // 8.B. Webhook Telegram Bot (Hỗ trợ cả Chat Group, Chat 1-1 và Channel Post)
+    const incomingMsg = contents.message || contents.channel_post;
+    if (incomingMsg) {
+      handleTelegramMessage(incomingMsg, ss);
     }
 
     if (contents.callback_query) {
@@ -689,13 +690,16 @@ function handleApiPostRequest(payload, ss) {
 // 10. XỬ LÝ TIN NHẮN & LỆNH TỪ TELEGRAM
 // ==============================================================================
 function handleTelegramMessage(msg, ss) {
-  const text = (msg.text || "").trim();
+  let text = (msg.text || "").trim();
   const chatId = (msg.chat && msg.chat.id) ? msg.chat.id : (msg.chatId || -1001);
-  const userId = msg.from ? msg.from.id : 0;
+  const userId = msg.from ? msg.from.id : (msg.sender_chat ? msg.sender_chat.id : (chatId || 0));
   const firstName = (msg.from && msg.from.first_name) || "";
-  const username = (msg.from && msg.from.username) ? "@" + msg.from.username : (firstName || "Thành viên");
+  const username = (msg.from && msg.from.username) ? "@" + msg.from.username : (firstName || (msg.chat && msg.chat.title) || "Thành viên");
 
   if (!text) return;
+
+  // Chuẩn hóa xóa đuôi @bot_name (ví dụ: /idea@my_toolhunt_bot -> /idea)
+  text = text.replace(/@\w+_bot/gi, "").trim();
 
   // Lệnh: /start hoặc /help
   if (text.startsWith("/start") || text.startsWith("/help")) {
