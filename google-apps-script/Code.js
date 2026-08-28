@@ -126,14 +126,14 @@ function checkAiDuplicate(title, description, existingIdeas, ss) {
 
   let responseJson = null;
 
-  // 1. Primary AI Provider: DeepSeek Chat API
-  if (provider === "deepseek") {
-    const apiKey = getConfig("DEEPSEEK_API_KEY");
+  // 1. Primary AI Provider: DeepSeek Chat API (Chỉ gọi khi đã cấu hình API Key)
+  const deepseekKey = getConfig("DEEPSEEK_API_KEY");
+  if (provider === "deepseek" && deepseekKey) {
     try {
       const res = UrlFetchApp.fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
         contentType: "application/json",
-        headers: apiKey ? { "Authorization": "Bearer " + apiKey } : {},
+        headers: { "Authorization": "Bearer " + deepseekKey },
         payload: JSON.stringify({
           model: "deepseek-chat",
           messages: [
@@ -158,11 +158,11 @@ function checkAiDuplicate(title, description, existingIdeas, ss) {
     }
   }
 
-  // 2. Secondary AI Provider Failover: Google Gemini Flash
-  if (!responseJson) {
-    const geminiKey = getConfig("GEMINI_API_KEY");
+  // 2. Secondary AI Provider Failover: Google Gemini Flash (Chỉ gọi khi có Key)
+  const geminiKey = getConfig("GEMINI_API_KEY");
+  if (!responseJson && geminiKey) {
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent${geminiKey ? "?key=" + geminiKey : ""}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
       const res = UrlFetchApp.fetch(geminiUrl, {
         method: "POST",
         contentType: "application/json",
