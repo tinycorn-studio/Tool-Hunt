@@ -29,7 +29,7 @@ def request_telegram(token: str, method: str, payload: dict = None):
 
 def main():
     print("\n======================================================")
-    print("🤖 TELEGRAM IDEA BOT - CÔNG CỤ CÀI ĐẶT WEBHOOK (PYTHON)")
+    print("🤖 TOOLHUNT ENTERPRISE - CÔNG CỤ CÀI ĐẶT WEBHOOK (PYTHON)")
     print("======================================================\n")
 
     token = input("🔑 1. Nhập Bot Token từ @BotFather: ").strip()

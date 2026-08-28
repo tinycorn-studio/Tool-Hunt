@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Bảng Đề Xuất & Bình Chọn Ý Tưởng Tool</title>
+  <title>ToolHunt Enterprise — Bảng Đề Xuất, Bình Chọn & Quỹ Thưởng Tool</title>
   
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -17,41 +17,72 @@
 
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-500 selection:text-white pb-8">
 
   <!-- ================= HEADER ================= -->
-  <header class="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
-    <div class="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between">
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 shadow-lg">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <!-- Brand & Identity -->
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-          <i class="fa-solid fa-lightbulb text-white text-lg"></i>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <i class="fa-solid fa-rocket text-white text-lg"></i>
         </div>
         <div>
-          <h1 class="text-base sm:text-lg font-bold leading-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-            Ý Tưởng Cộng Đồng
-          </h1>
-          <p class="text-xs text-slate-400 font-medium">Bình chọn & Đề xuất công cụ tự động</p>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-base sm:text-lg font-extrabold leading-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+              ToolHunt Enterprise
+            </h1>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">v3.0</span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium">Bình chọn, Phát triển & Quỹ thưởng Tool</p>
         </div>
       </div>
 
+      <!-- User Role Selector & Action Buttons -->
       <div class="flex items-center space-x-2">
-        <button id="btnConfig" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors text-sm" title="Cấu hình API">
+        <!-- RBAC Role Dropdown / Switcher -->
+        <div class="relative group">
+          <button id="btnRoleSelector" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 hover:border-slate-600 text-xs font-semibold text-slate-300 flex items-center space-x-1.5 transition-all">
+            <i class="fa-solid fa-shield-halved text-indigo-400 text-xs"></i>
+            <span id="currentRoleLabel">Developer</span>
+            <i class="fa-solid fa-chevron-down text-[10px] text-slate-500 ml-1"></i>
+          </button>
+          <div id="roleDropdownMenu" class="hidden absolute right-0 mt-1 w-40 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 z-50 text-xs">
+            <button onclick="setRole('Member')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-300 flex items-center space-x-2">
+              <i class="fa-regular fa-user text-slate-400"></i><span>Member</span>
+            </button>
+            <button onclick="setRole('Developer')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-indigo-300 font-semibold flex items-center space-x-2">
+              <i class="fa-solid fa-code text-indigo-400"></i><span>Developer</span>
+            </button>
+            <button onclick="setRole('Manager')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-emerald-300 flex items-center space-x-2">
+              <i class="fa-solid fa-user-tie text-emerald-400"></i><span>Manager</span>
+            </button>
+            <button onclick="setRole('Admin')" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-rose-300 flex items-center space-x-2">
+              <i class="fa-solid fa-crown text-rose-400"></i><span>Admin</span>
+            </button>
+          </div>
+        </div>
+
+        <button id="btnConfig" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors text-sm" title="Cấu hình API">
           <i class="fa-solid fa-gear"></i>
         </button>
+
         <button id="btnOpenModal" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl shadow-lg shadow-indigo-600/30 flex items-center space-x-1.5 transition-all transform active:scale-95">
           <i class="fa-solid fa-plus"></i>
-          <span>Đề Xuất</span>
+          <span class="hidden sm:inline">Đề Xuất Tool</span>
+          <span class="sm:hidden">Đề Xuất</span>
         </button>
       </div>
     </div>
   </header>
 
   <!-- ================= MAIN CONTENT ================= -->
-  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-5 space-y-5">
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-5 space-y-5">
 
-    <!-- STATS BANNER -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3">
+    <!-- 4 STATS CARDS -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <!-- 1. Total Ideas -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3 backdrop-blur-sm">
         <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">
           <i class="fa-solid fa-layer-group"></i>
         </div>
@@ -61,7 +92,8 @@
         </div>
       </div>
 
-      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3">
+      <!-- 2. Total Votes -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3 backdrop-blur-sm">
         <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-base">
           <i class="fa-solid fa-thumbs-up"></i>
         </div>
@@ -71,18 +103,30 @@
         </div>
       </div>
 
-      <div class="col-span-2 sm:col-span-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3">
+      <!-- 3. Active Developers -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3 backdrop-blur-sm">
         <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold text-base">
-          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <i class="fa-solid fa-laptop-code"></i>
         </div>
         <div>
-          <div id="statTopCategory" class="text-sm font-bold text-cyan-300 truncate max-w-[120px]">Auto Sheet</div>
-          <div class="text-[11px] text-slate-400 font-medium">Chủ đề hot nhất</div>
+          <div id="statActiveDevs" class="text-lg sm:text-xl font-extrabold text-white">0</div>
+          <div class="text-[11px] text-slate-400 font-medium">Dev đang nhận làm</div>
+        </div>
+      </div>
+
+      <!-- 4. Total Bounty Pool -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-3 backdrop-blur-sm">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-base">
+          <i class="fa-solid fa-sack-dollar"></i>
+        </div>
+        <div class="min-w-0">
+          <div id="statTotalBounties" class="text-sm sm:text-base font-extrabold text-amber-300 truncate">0 VNĐ</div>
+          <div class="text-[11px] text-slate-400 font-medium">Tổng quỹ Bounty</div>
         </div>
       </div>
     </div>
 
-    <!-- SEARCH & FILTERS -->
+    <!-- SEARCH & FILTER TABS -->
     <div class="space-y-3">
       <!-- Search Input -->
       <div class="relative">
@@ -90,24 +134,27 @@
         <input
           id="searchInput"
           type="text"
-          placeholder="Tìm kiếm ý tưởng, công cụ, người đề xuất..."
+          placeholder="Tìm kiếm ý tưởng, công cụ, lập trình viên (@dev), thể loại..."
           class="w-full bg-slate-900/80 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
         />
       </div>
 
-      <!-- Filter Tabs -->
+      <!-- Filter Tabs (6 Tabs) -->
       <div class="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none text-xs font-semibold">
         <button data-filter="all" class="filter-tab active px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm whitespace-nowrap transition-all">
           🌟 Tất cả
         </button>
         <button data-filter="top" class="filter-tab px-3.5 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 whitespace-nowrap transition-all">
-          🔥 Vote nhiều nhất
+          🔥 Top Vote
         </button>
-        <button data-filter="voting" class="filter-tab px-3.5 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 whitespace-nowrap transition-all">
-          ⏳ Đang lấy ý kiến
+        <button data-filter="bounty" class="filter-tab px-3.5 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 whitespace-nowrap transition-all">
+          💰 Quỹ Bounty
         </button>
         <button data-filter="inprogress" class="filter-tab px-3.5 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 whitespace-nowrap transition-all">
           🚀 Đang phát triển
+        </button>
+        <button data-filter="beta" class="filter-tab px-3.5 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 whitespace-nowrap transition-all">
+          🧪 Beta Testing
         </button>
         <button data-filter="completed" class="filter-tab px-3.5 py-1.5 rounded-lg bg-slate-900 text-slate-400 hover:text-white border border-slate-800 whitespace-nowrap transition-all">
           ✅ Đã hoàn thành
@@ -116,7 +163,7 @@
     </div>
 
     <!-- IDEAS LIST CONTAINER -->
-    <div id="ideasContainer" class="space-y-3">
+    <div id="ideasContainer" class="space-y-3.5">
       <!-- Skeleton Loading State -->
       <div class="skeleton-card bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 animate-pulse space-y-3">
         <div class="flex justify-between items-start">
@@ -145,16 +192,15 @@
 
   </main>
 
-  <!-- ================= MODAL: TẠO Ý TƯỞNG MỚI ================= -->
-  <div id="modalSubmit" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+  <!-- ================= MODAL 1: ĐỀ XUẤT Ý TƯỞNG MỚI ================= -->
+  <div id="modalSubmit" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-      
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div class="flex items-center space-x-2.5">
           <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">
             <i class="fa-solid fa-plus"></i>
           </div>
-          <h2 class="text-base sm:text-lg font-bold text-white">Đề Xuất Ý Tưởng Mới</h2>
+          <h2 class="text-base sm:text-lg font-bold text-white">Đề Xuất Ý Tưởng Tool</h2>
         </div>
         <button id="btnCloseModal" class="text-slate-400 hover:text-white p-1 rounded-lg">
           <i class="fa-solid fa-xmark text-lg"></i>
@@ -168,7 +214,7 @@
             id="inputTitle"
             type="text"
             required
-            placeholder="VD: Tool Auto Fill Hóa Đơn VAT"
+            placeholder="VD: Tool Auto Fill Hóa Đơn VAT vào Sheet"
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
         </div>
@@ -180,7 +226,7 @@
               <option value="Auto Sheet">📊 Auto Sheet</option>
               <option value="Cào Dữ Liệu">🕷️ Cào Dữ Liệu Web</option>
               <option value="AI & Chatbot">🤖 AI & Chatbot</option>
-              <option value="Tiện Ích & Tool">⚙️ Tiện Ích Khác</option>
+              <option value="Tiện Ích & Tool">⚙️ Tiện Ích & Tool</option>
             </select>
           </div>
           <div>
@@ -200,7 +246,7 @@
             id="inputDescription"
             rows="4"
             required
-            placeholder="Mô tả cụ thể: Tool làm nhiệm vụ gì? Tiết kiệm thời gian thế nào? Đầu vào / Đầu ra là gì?"
+            placeholder="Mô tả cụ thể: Tool giải quyết vấn đề gì? Tiết kiệm bao nhiêu thời gian? Quy trình hoạt động thế nào?"
             class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           ></textarea>
         </div>
@@ -218,13 +264,226 @@
     </div>
   </div>
 
-  <!-- ================= MODAL: CẤU HÌNH API ================= -->
-  <div id="modalConfig" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+  <!-- ================= MODAL 2: AI DUPLICATE WARNING MODAL (R1) ================= -->
+  <div id="modalDuplicateWarning" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl shadow-amber-500/10 relative animate-in fade-in zoom-in duration-200">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold text-base">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center space-x-2">
+              <span>AI Cảnh Báo Trùng Lặp Ý Tưởng</span>
+            </h2>
+            <p class="text-xs text-amber-400/90 font-medium">Phát hiện ý tưởng có nội dung tương đồng cao</p>
+          </div>
+        </div>
+        <button id="btnCloseDupModal" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- AI Score & Analysis Box -->
+      <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300">Độ tương đồng ngữ nghĩa:</span>
+          <span id="dupSimilarityBadge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">88%</span>
+        </div>
+        <p id="dupReasonText" class="text-xs text-slate-400 leading-relaxed">
+          Ý tưởng của bạn có mục tiêu và luồng xử lý tương tự với ý tưởng đã tồn tại trong hệ thống.
+        </p>
+      </div>
+
+      <!-- Matched Idea Summary Card -->
+      <div class="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-3.5 space-y-2">
+        <div class="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">Ý tưởng trùng khớp đã có sẵn:</div>
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="text-xs font-extrabold text-white flex items-center space-x-2">
+              <span id="dupMatchedId" class="text-indigo-400 font-mono">#1</span>
+              <span id="dupMatchedTitle">Tool Auto Hóa Đơn PDF</span>
+            </div>
+            <p id="dupMatchedDesc" class="text-xs text-slate-300 mt-1 line-clamp-2">
+              Tự động quét và đọc nội dung hóa đơn PDF lưu vào Google Sheet...
+            </p>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <span id="dupMatchedVotes" class="text-xs font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">👍 42 votes</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Choice Buttons -->
+      <div class="space-y-2 pt-1">
+        <button id="btnMergeVote" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs sm:text-sm font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2 transition-all transform active:scale-95">
+          <i class="fa-solid fa-arrows-split-up-and-left"></i>
+          <span>Dồn Vote Vào Ý Tưởng Có Sẵn Này (Khuyên dùng)</span>
+        </button>
+
+        <div class="flex items-center space-x-2">
+          <button id="btnForceSubmit" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold py-2 px-3 rounded-xl border border-slate-700 transition-colors">
+            ⚡ Vẫn muốn tạo mới riêng
+          </button>
+          <button id="btnCancelDup" class="px-4 py-2 rounded-xl border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+            Hủy bỏ
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= MODAL 3: TREO THƯỞNG / PLEDGE BOUNTY (R4) ================= -->
+  <div id="modalBountyPledge" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/30 rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-base">
+            <i class="fa-solid fa-sack-dollar"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white">Treo Thưởng / Góp Quỹ Tool</h2>
+            <p id="bountyModalTargetTitle" class="text-xs text-amber-400 truncate max-w-[220px]">#1 Tool Auto Fill</p>
+          </div>
+        </div>
+        <button id="btnCloseBountyModal" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="formPledgeBounty" class="space-y-3.5">
+        <input type="hidden" id="bountyTargetIdeaId" value="" />
+
+        <!-- Unit Selector -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Hình thức đóng góp</label>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <label class="flex items-center justify-center space-x-1.5 p-2 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/10">
+              <input type="radio" name="bountyUnit" value="VND" checked class="hidden" />
+              <span>💵 VNĐ</span>
+            </label>
+            <label class="flex items-center justify-center space-x-1.5 p-2 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/10">
+              <input type="radio" name="bountyUnit" value="COFFEE" class="hidden" />
+              <span>☕ Coffee</span>
+            </label>
+            <label class="flex items-center justify-center space-x-1.5 p-2 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/10">
+              <input type="radio" name="bountyUnit" value="POINTS" class="hidden" />
+              <span>🏆 Points</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Quick Amount Presets -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Số lượng / Mức tài trợ</label>
+          <div id="vndPresets" class="grid grid-cols-4 gap-1.5 mb-2">
+            <button type="button" onclick="setBountyAmount(50000)" class="px-2 py-1 bg-slate-800 text-slate-300 text-[11px] rounded-lg hover:bg-slate-700">50k</button>
+            <button type="button" onclick="setBountyAmount(100000)" class="px-2 py-1 bg-slate-800 text-slate-300 text-[11px] rounded-lg hover:bg-slate-700">100k</button>
+            <button type="button" onclick="setBountyAmount(200000)" class="px-2 py-1 bg-slate-800 text-slate-300 text-[11px] rounded-lg hover:bg-slate-700">200k</button>
+            <button type="button" onclick="setBountyAmount(500000)" class="px-2 py-1 bg-slate-800 text-slate-300 text-[11px] rounded-lg hover:bg-slate-700">500k</button>
+          </div>
+          <input
+            id="inputBountyAmount"
+            type="number"
+            min="1"
+            required
+            placeholder="Nhập số tiền VNĐ hoặc số ly cà phê"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Người tài trợ (Tên / Telegram)</label>
+          <input
+            id="inputBountySponsor"
+            type="text"
+            placeholder="@sponsor_handle"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Lời nhắn / Yêu cầu kèm theo</label>
+          <input
+            id="inputBountyMessage"
+            type="text"
+            placeholder="VD: Cần hỗ trợ xuất thêm định dạng Excel"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-2">
+          <button type="button" id="btnCancelBounty" class="px-4 py-2 rounded-xl border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+            Hủy
+          </button>
+          <button type="submit" id="btnSubmitBounty" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-lg shadow-amber-600/30 flex items-center space-x-1.5 transition-all">
+            <i class="fa-solid fa-coins"></i>
+            <span>Xác Nhận Treo Thưởng</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 4: CẬP NHẬT TIẾN ĐỘ & MILESTONES (R2) ================= -->
+  <div id="modalDevProgress" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl relative">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-bars-progress text-indigo-400"></i>
+          <h2 class="text-base font-bold text-white">Cập Nhật Tiến Độ Phát Triển</h2>
+        </div>
+        <button id="btnCloseProgressModal" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="formDevProgress" class="space-y-3.5 text-xs">
+        <input type="hidden" id="progressTargetIdeaId" value="" />
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Mốc tiến độ hoàn thành</label>
+          <select id="selectProgressPercent" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500">
+            <option value="25%">25% — Khởi tạo dự án & Kiến trúc</option>
+            <option value="50%">50% — Hoàn thiện Core tính năng</option>
+            <option value="80%">80% — Đang thử nghiệm (Beta Testing)</option>
+            <option value="100%">100% — Đã xuất bản hoàn tất</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Ghi chú chi tiết tiến độ</label>
+          <input
+            id="inputProgressNote"
+            type="text"
+            placeholder="VD: Đã tích hợp xong OCR PDF, đang nối Google Drive"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+          <button type="button" id="btnCancelProgress" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-400 hover:text-white">
+            Đóng
+          </button>
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-xl">
+            Lưu Tiến Độ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 5: CẤU HÌNH API ================= -->
+  <div id="modalConfig" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl relative">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <h2 class="text-base font-bold text-white flex items-center space-x-2">
           <i class="fa-solid fa-sliders text-indigo-400"></i>
-          <span>Cấu Hình Kết Nối API</span>
+          <span>Cấu Hình Kết Nối API Enterprise</span>
         </h2>
         <button id="btnCloseConfig" class="text-slate-400 hover:text-white p-1 rounded-lg">
           <i class="fa-solid fa-xmark text-lg"></i>
@@ -233,7 +492,7 @@
 
       <div class="space-y-3 text-xs">
         <p class="text-slate-400">
-          Nhập <b>URL Web App của Google Apps Script</b> để kết nối Dashboard này với Google Sheet của bạn:
+          Nhập <b>URL Web App của Google Apps Script</b> để kết nối Dashboard này với Google Sheet và Telegram Bot:
         </p>
         <input
           id="configApiUrl"
@@ -242,7 +501,7 @@
           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
         />
         <div class="text-[11px] text-slate-500">
-          💡 Nếu để trống, hệ thống sẽ sử dụng dữ liệu mô phỏng (Demo Mode).
+          💡 Nếu để trống, hệ thống sẽ sử dụng dữ liệu mô phỏng doanh nghiệp (Enterprise Demo Mode).
         </div>
       </div>
 

@@ -1,62 +1,114 @@
-# 👑 HƯỚNG DẪN QUẢN TRỊ & VẬN HÀNH HỆ THỐNG
+# 👑 HƯỚNG DẪN QUẢN TRỊ & VẬN HÀNH TOOLHUNT ENTERPRISE
 
-Tài liệu dành cho Quản trị viên (Admin / Moderator) để quản lý luồng ý tưởng, thay đổi trạng thái phát triển và trích xuất báo cáo.
-
----
-
-## 1. Phân Quyền Quản Trị Viên (Admin)
-
-Để cấp quyền Admin cho một thành viên:
-1. Mở file Google Sheet ➔ Chọn sheet **`Admins`**.
-2. Thêm một dòng mới:
-   * **Cột A (User ID Telegram):** Điền Telegram User ID của người đó (Ví dụ: `123456789`). Có thể lấy ID qua bot `@userinfobot`.
-   * **Cột B (Username / Tên):** `@username`
-   * **Cột C (Vai Trò):** `Admin` hoặc `Moderator`
-   * **Cột D (Ngày Thêm):** Ngày hiện tại
+Tài liệu hướng dẫn chuyên sâu dành cho Quản trị viên (Admin) và Người điều phối (Manager) quản lý hệ thống phân quyền 4 cấp độ (RBAC), kiểm soát vòng đời phát triển của Developer, cấu hình AI Duplicate Detection, quản lý sổ cái quỹ thưởng Bounty và nhật ký kiểm toán.
 
 ---
 
-## 2. Quản Lý Vòng Đời Ý Tưởng (Status Lifecycle)
+## 1. Hệ Thống Phân Quyền Doanh Nghiệp 4 Cấp (4-Tier RBAC)
 
-Mỗi ý tưởng sẽ trải qua các giai đoạn:
+Hệ thống ToolHunt Enterprise áp dụng mô hình phân quyền chặt chẽ:
 
 ```
-[⏳ Đang lấy ý kiến] ➔ [🔍 Đang duyệt] ➔ [🚀 Đang phát triển] ➔ [✅ Đã hoàn thành]
-                                      └── [❌ Từ chối / Tạm hoãn]
+┌─────────────────────────────────────────────────────────────┐
+│ 👑 Admin (Quản trị viên tối cao)                            │
+│ └── Toàn quyền hệ thống, override mọi trạng thái, config   │
+├─────────────────────────────────────────────────────────────┤
+│ 👔 Manager (Người điều phối dự án)                          │
+│ └── Điều phối ý tưởng, duyệt trạng thái, quản lý quỹ thưởng│
+├─────────────────────────────────────────────────────────────┤
+│ 🛠 Developer (Lập trình viên)                               │
+│ └── Nhận task (claim), cập nhật tiến độ, ra mắt Beta / Done │
+├─────────────────────────────────────────────────────────────┤
+│ 👤 Member (Thành viên cộng đồng)                            │
+│ └── Đăng ý tưởng, Upvote/Unvote, tài trợ Bounty, test Beta  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Cách 1: Đổi trạng thái trực tiếp bằng lệnh Telegram (Chỉ Admin)
-Trong nhóm hoặc trong chat riêng với bot, Admin gõ lệnh:
-```text
-/status [ID_Ý_TƯỞNG] [TRẠNG_THÁI_MỚI]
-```
-*Ví dụ:*
-* `/status 1 Đang phát triển`
-* `/status 3 Đã hoàn thành`
-* `/status 5 Tạm hoãn (Chưa khả thi)`
+### Chi tiết quyền hạn từng vai trò:
 
-### Cách 2: Đổi trạng thái trực tiếp trên Google Sheet
-1. Mở sheet **`Ideas`**.
-2. Tìm đến dòng của ý tưởng cần đổi.
-3. Sửa giá trị tại **Cột K (`Trạng Thái`)**.
-4. Dữ liệu trên Web Dashboard và Mini App sẽ tự động đồng bộ theo giá trị mới!
-
----
-
-## 3. Các Lệnh Quản Trị Hữu Ích
-
-| Lệnh | Chức năng | Ai được dùng |
+| Vai trò | Lệnh & Thao tác được phép | Quyền hạn đặc biệt |
 | :--- | :--- | :--- |
-| `/idea [Tên] \| [Mô tả]` | Đề xuất ý tưởng tool mới | Tất cả thành viên |
-| `/top` | Xem Top 5 ý tưởng có số vote cao nhất | Tất cả thành viên |
-| `/myideas` | Xem danh sách ý tưởng cá nhân đã gửi | Tất cả thành viên |
-| `/stats` | Xem báo cáo tổng số ý tưởng & lượt vote | Tất cả thành viên |
-| `/status [ID] [Status]` | Cập nhật trạng thái phát triển | **Chỉ Admin** |
-| `/help` | Xem bảng hướng dẫn các lệnh | Tất cả thành viên |
+| **Admin** | Toàn bộ lệnh bot (`/idea`, `/top`, `/claim`, `/unclaim`, `/status`, `/bounty`), truy cập toàn bộ menu Google Sheet | Thay đổi cấu hình `Config`, phân quyền `Admins`, ép đổi trạng thái bất kỳ ý tưởng nào (Override authority) |
+| **Manager** | `/status`, `/claim`, `/unclaim` (bất kỳ task nào), duyệt giải ngân Bounty | Điều phối task giữa các Developer, xem nhật ký kiểm toán `AuditLogs` |
+| **Developer** | `/claim` (task mở), `/unclaim` (task của chính mình), nút `[ 🧪 Lên Beta ]`, `[ ✅ Hoàn thành ]`, cập nhật mốc `Milestones` | Được ghi nhận tên và ID lên bài đăng và Dashboard |
+| **Member** | `/idea` (kèm AI check), `/bounty` (tài trợ quỹ), Upvote/Unvote, nhận tin nhắn trải nghiệm Beta | Đề xuất ý tưởng mới và bình chọn |
 
 ---
 
-## 4. Xử Lý Khi Có Trùng Lặp Hoặc Gian Lận Vote
+## 2. Quản Lý Danh Sách & Phân Quyền Trong Sheet `Admins`
 
-* **Cơ chế chống gian lận tự động:** Hệ thống kiểm tra từng lượt click vào sheet `Votes`. Nếu cùng 1 `User ID` bấm vào cùng 1 `Idea ID`, hệ thống sẽ tự động chuyển thành **Rút lại vote (Unvote)** hoặc từ chối cộng thêm điểm.
-* **Xóa ý tưởng vi phạm:** Nếu có ý tưởng spam hoặc không phù hợp, Admin chỉ cần xóa dòng tương ứng trong sheet `Ideas`.
+Để cấp quyền hoặc thay đổi vai trò của thành viên:
+1. Mở Google Sheet ➔ Chọn sheet **`Admins`**.
+2. Nhập thông tin theo cấu trúc 5 cột:
+   * **Cột A (`User ID Telegram`):** Telegram User ID (Số nguyên, ví dụ: `123456789`). Lấy qua bot `@userinfobot`.
+   * **Cột B (`Username / Tên`):** `@username` hoặc họ tên thành viên.
+   * **Cột C (`Vai Trò`):** `Admin`, `Manager`, `Developer` hoặc `Member`.
+   * **Cột D (`Trạng Thái`):** `Active` (hoạt động) hoặc `Inactive` (tạm khóa quyền).
+   * **Cột E (`Ngày Thêm`):** Ngày cấp quyền (ví dụ: `28/08/2026`).
+
+---
+
+## 3. Quản Lý Vòng Đời Ý Tưởng & Developer FSM
+
+Ý tưởng trải qua máy trạng thái hữu hạn (FSM) gồm 4 giai đoạn chính:
+
+```
+[⏳ Đang lấy ý kiến] ──(claim_task)──> [🚀 Đang phát triển]
+[🚀 Đang phát triển] ──(devbeta)──────> [🧪 Beta Testing] (Kích hoạt R3 Thông báo Voters)
+[🧪 Beta Testing] ───(devdone)──────> [✅ Hoàn thành] (Kích hoạt R3 & Mở khóa Bounty)
+[🚀 Đang phát triển] ──(unclaim)──────> [⏳ Đang lấy ý kiến] (Nhả task)
+```
+
+### Cách thức điều chỉnh trạng thái:
+1. **Lập trình viên phụ trách:**
+   - Dùng nút bấm Inline trên Telegram hoặc Web Dashboard: `[ 🧪 Ra mắt Beta ]`, `[ ✅ Hoàn thành ]`, `[ ❌ Hủy nhận ]`.
+2. **Admin / Manager:**
+   - Dùng lệnh Telegram: `/status [ID] [Trạng thái mới]` (ví dụ: `/status 1 Beta Testing`).
+   - Hoặc chỉnh sửa trực tiếp tại Cột 11 (`Trạng Thái`) trong sheet `Ideas`.
+
+---
+
+## 4. Cấu Hình & Tinh Chỉnh AI Duplicate Detection (R1)
+
+Tại sheet **`Config`**, Admin có thể tinh chỉnh các thông số AI:
+
+1. **`AI_PROVIDER`:**
+   - `deepseek`: Sử dụng mô hình DeepSeek Chat (khuyên dùng vì độ chính xác ngữ nghĩa cao và chi phí cực rẻ).
+   - `gemini`: Sử dụng Google Gemini 1.5 Flash (miễn phí qua Google AI Studio).
+2. **`AI_SIMILARITY_THRESHOLD`:**
+   - Mặc định: `75` (Ngưỡng % tương đồng kích hoạt cảnh báo trùng).
+   - Đặt `65` - `70` nếu muốn hệ thống cảnh báo nhạy hơn (chặn trùng chặt chẽ).
+   - Đặt `80` - `85` nếu muốn cho phép nhiều ý tưởng có nét tương đồng được đăng.
+3. **`DEEPSEEK_API_KEY` & `GEMINI_API_KEY`:**
+   - Điền API Key tương ứng. Hệ thống tự động kích hoạt chế độ Failover: nếu DeepSeek quá tải hoặc lỗi 500, hệ thống tự động chuyển sang Gemini Flash để không làm gián đoạn người dùng.
+
+---
+
+## 5. Quản Lý Quỹ Thưởng Tool (Bounty Ledger - R4)
+
+Toàn bộ các khoản đóng góp được theo dõi minh bạch trong sheet **`Bounties`**:
+- Cột A: Thời gian giao dịch.
+- Cột B: Bounty ID tự tăng.
+- Cột C: Idea ID được tài trợ.
+- Cột D & E: User ID và Username người tài trợ.
+- Cột F & G: Số lượng và đơn vị (`VND`, `COFFEE`, `USD`, `POINTS`).
+- Cột H: Lời nhắn tài trợ.
+- Cột I: Trạng thái:
+  * `PLEDGED`: Đã cam kết tài trợ trên hệ thống.
+  * `PAID`: Đã nhận tiền vào tài khoản quỹ cộng đồng.
+  * `RELEASED`: Đã giải ngân/trao thưởng cho Developer khi ý tưởng chuyển sang `Hoàn thành`.
+  * `CANCELLED`: Giao dịch bị hủy.
+
+---
+
+## 6. Nhật Ký Kiểm Toán (Audit Logs - R5)
+
+Sheet **`AuditLogs`** tự động ghi nhận mọi hành vi quan trọng để phục vụ hậu kiểm:
+* `CREATE_IDEA` / `FORCE_CREATE_IDEA`
+* `UPVOTE` / `UNVOTE`
+* `CLAIM_TASK` / `UNCLAIM_TASK`
+* `DEV_STATUS_TRANSITION`
+* `PLEDGE_BOUNTY`
+* `UPDATE_STATUS`
+
+Admin có thể tra cứu nhanh lịch sử thay đổi, thời gian, người thực hiện và chi tiết tác vụ khi cần đối soát.

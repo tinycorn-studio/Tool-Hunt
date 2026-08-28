@@ -1,65 +1,83 @@
-# 💡 ToolHunt - Telegram Community Idea & Vote Bot
+# 💡 ToolHunt Enterprise (v3.0.0) — Telegram Idea Hub & Developer Crowdfunding
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tinycorn-studio/Tool-Hunt/main/docs/assets/banner.png" alt="ToolHunt Banner" width="100%" onerror="this.style.display='none'"/>
+  <img src="https://raw.githubusercontent.com/tinycorn-studio/Tool-Hunt/main/docs/assets/banner.png" alt="ToolHunt Enterprise Banner" width="100%" onerror="this.style.display='none'"/>
 </p>
 
 <p align="center">
-  <b>Hệ thống đề xuất & bình chọn ý tưởng công cụ dành cho cộng đồng Telegram, tích hợp Google Sheets 2 chiều & Telegram Mini App Dashboard.</b>
+  <b>Hệ thống quản lý, bình chọn ý tưởng công nghệ và gọi vốn cộng đồng (Tool Bounty) chuyên nghiệp dành cho Telegram Community, tích hợp AI Duplicate Detection (DeepSeek & Gemini), Developer Task Claiming, Targeted Beta Notifications và Google Sheets 2 chiều.</b>
 </p>
 
 <p align="center">
   <a href="https://github.com/tinycorn-studio/Tool-Hunt/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License MIT"></a>
-  <a href="https://core.telegram.org/bots/api"><img src="https://img.shields.io/badge/Telegram-Bot%20API-2CA5E0?logo=telegram&logoColor=white" alt="Telegram Bot API"></a>
+  <a href="https://core.telegram.org/bots/api"><img src="https://img.shields.io/badge/Telegram-Bot%20API%20v7.0-2CA5E0?logo=telegram&logoColor=white" alt="Telegram Bot API"></a>
   <a href="https://developers.google.com/apps-script"><img src="https://img.shields.io/badge/Google-Apps%20Script-4285F4?logo=google&logoColor=white" alt="Google Apps Script"></a>
-  <a href="https://www.google.com/sheets/about/"><img src="https://img.shields.io/badge/Database-Google%20Sheets-34A853?logo=googlesheets&logoColor=white" alt="Google Sheets"></a>
+  <a href="https://www.google.com/sheets/about/"><img src="https://img.shields.io/badge/Database-Google%20Sheets%20Enterprise-34A853?logo=googlesheets&logoColor=white" alt="Google Sheets"></a>
+  <a href="https://deepseek.com"><img src="https://img.shields.io/badge/AI-DeepSeek%20V3-0066FF" alt="DeepSeek"></a>
+  <a href="https://ai.google.dev"><img src="https://img.shields.io/badge/AI-Gemini%201.5%20Flash-8E75B2" alt="Google Gemini"></a>
   <a href="#"><img src="https://img.shields.io/badge/Hosting-100%25%20Serverless%20Free-emerald" alt="Serverless Free"></a>
 </p>
 
 ---
 
-## 🌟 Điểm Nổi Bật (Key Features)
+## 🌟 Tính Năng Nổi Bật (Enterprise Features)
 
-- ⚡ **100% Miễn Phí & Serverless:** Vận hành hoàn toàn trên hạ tầng của **Google Apps Script & Google Sheets**, không tốn chi phí thuê máy chủ/VPS.
-- 🗳 **Bình Chọn Tương Tác Real-time (Inline Buttons):** Gắn nút `[ 👍 Upvote (0) ]` và `[ ℹ️ Chi tiết ]` trực tiếp dưới tin nhắn trong nhóm Telegram. Số lượt vote nhảy ngay lập tức khi thành viên tương tác.
-- 🛡 **Cơ Chế Chống Gian Lận & Rút Vote (Anti-Spam & Toggle Unvote):** Mỗi User ID chỉ được vote 1 lần cho 1 ý tưởng. Nhấn lần thứ hai sẽ tự động hủy vote và trừ điểm tương ứng.
-- 📊 **Quản Lý Bảng Tính Tự Động:** Tích hợp sẵn Menu **`🤖 Quản Lý Bot Telegram`** trong Google Sheets để tự động khởi tạo 4 sheet chuẩn hóa (`Ideas`, `Votes`, `Config`, `Admins`) và cài đặt Webhook chỉ với 1 cú click.
-- 🌐 **Telegram Mini App & Web Dashboard:** Giao diện mobile-first theo phong cách *Product Hunt*, lọc theo trạng thái (`Đang lấy ý kiến`, `Đang phát triển`, `Đã hoàn thành`), hỗ trợ tìm kiếm và gửi đề xuất trực quan.
-- 👑 **Phân Quyền Quản Trị Linh Hoạt (Admin Control):** Cho phép Admin cập nhật tiến độ ý tưởng trực tiếp qua lệnh `/status <ID> <Trạng thái>` hoặc chỉnh sửa ngay trên file Google Sheet.
+- 🤖 **R1. AI Duplicate Detection (DeepSeek & Gemini):** Nhận diện ngữ nghĩa ý tưởng trùng lặp thời gian thực với độ chính xác cao; tự động đề xuất dồn vote (`merge_vote`) hoặc xác nhận tạo mới (`force_create`).
+- 🛠 **R2. Developer Task Claiming & Lifecycle FSM:** Lập trình viên nhận phát triển ý tưởng `[ 🛠 Nhận làm tool ]`, quản lý tiến độ mốc (`Milestones`) và chuyển giao trạng thái trực quan (`Đang phát triển` ➔ `Beta Testing` ➔ `Hoàn thành`).
+- 🧪 **R3. Targeted Beta Tester Notifications:** Tự động lọc danh sách người dùng đã từng Upvote để gửi thông báo riêng (Direct Message / Mention) kèm link trải nghiệm bản Beta và form đánh giá.
+- 💰 **R4. Tool Bounty & Crowdfunding:** Cơ chế tài trợ / treo thưởng đa đơn vị tiền tệ (VNĐ, USD, Coffee ☕, Points) với huy hiệu vàng nổi bật và sổ cái tài chính trên sheet `Bounties`.
+- 👑 **R5. Phân Quyền 4 Cấp (4-Tier RBAC):** Kiểm soát phân quyền chặt chẽ (`Member`, `Developer`, `Manager`, `Admin`) trên toàn bộ Bot commands, Web Dashboard và REST API.
+- ⚡ **100% Serverless & Miễn Phí Trọn Đời:** Hoạt động hoàn toàn trên hạ tầng Google Apps Script & Google Sheets, không tốn chi phí thuê server/VPS.
 
 ---
 
 ## 🏗 Kiến Trúc Hệ Thống (Architecture)
 
 ```mermaid
-flowchart LR
-    subgraph Telegram ["📱 Nền Tảng Telegram"]
-        Member["Thành viên Group"]
-        BotMsg["Tin nhắn Ý Tưởng (#ID)<br/>[ 👍 Upvote ] [ ℹ️ Chi tiết ]"]
-        MiniApp["Telegram Mini App<br/>(Web Dashboard)"]
+flowchart TB
+    subgraph Clients ["📱 Giao Diện Người Dùng & Cộng Đồng"]
+        Member["Thành viên Group Telegram"]
+        Dev["Lập trình viên (Developer)"]
+        MiniApp["Telegram Mini App / Web Dashboard"]
     end
 
-    subgraph Backend ["⚡ Google Apps Script (Serverless)"]
-        Webhook["Webhook Router (doPost)"]
-        RestApi["REST API Engine (doGet)"]
-        VoteLogic["Vote & Anti-Spam Logic"]
+    subgraph Backend ["⚡ Google Apps Script Engine (Serverless Backend)"]
+        Router["Webhook & Event Router (doPost)"]
+        RestApi["REST API Engine (doGet & doPost)"]
+        AiEngine["AI Deduplication Engine<br/>(DeepSeek & Gemini Flash)"]
+        FsmLifecycle["Developer Lifecycle FSM"]
+        Notifier["Targeted Beta Notifier"]
+        BountyLedger["Bounty Ledger & Crowdfunding"]
+        RbacEngine["4-Tier RBAC Matrix"]
     end
 
-    subgraph Database ["📊 Google Sheets Database"]
-        SheetIdeas[("Sheet: Ideas<br/>- ID, Tiêu đề, Mô tả<br/>- Tổng vote, Trạng thái")]
-        SheetVotes[("Sheet: Votes<br/>- Lịch sử User Vote")]
-        SheetConfig[("Sheet: Config<br/>- Token, Nhóm ID")]
+    subgraph Database ["📊 Google Sheets Persistence Layer"]
+        SheetIdeas[("Sheet: Ideas (17 cols)")]
+        SheetVotes[("Sheet: Votes (5 cols)")]
+        SheetBounties[("Sheet: Bounties (10 cols)")]
+        SheetAdmins[("Sheet: Admins (5 cols)")]
+        SheetConfig[("Sheet: Config (3 cols)")]
+        SheetAudit[("Sheet: AuditLogs (5 cols)")]
     end
 
-    Member -->|Gõ /idea| Webhook
-    Member -->|Bấm nút Upvote| Webhook
-    Webhook --> VoteLogic
-    VoteLogic <--> SheetVotes
-    VoteLogic <--> SheetIdeas
-    VoteLogic -->|Cập nhật nút bấm| BotMsg
-    
-    MiniApp <-->|Đồng bộ 2 chiều| RestApi
+    Member -->|Gõ /idea, /bounty, Upvote| Router
+    Dev -->|Claim Task, Update Beta, Release| Router
+    MiniApp <-->|REST API 2 chiều| RestApi
+
+    Router --> AiEngine
+    Router --> FsmLifecycle
+    Router --> RbacEngine
+    FsmLifecycle --> Notifier
+    Router --> BountyLedger
+
+    AiEngine <--> SheetIdeas
+    FsmLifecycle <--> SheetIdeas
+    Notifier <--> SheetVotes
+    BountyLedger <--> SheetBounties
+    RbacEngine <--> SheetAdmins
     RestApi <--> SheetIdeas
+    RestApi <--> SheetVotes
+    RestApi <--> SheetBounties
 ```
 
 ---
@@ -69,20 +87,20 @@ flowchart LR
 ```text
 Tool-Hunt/
 ├── google-apps-script/
-│   ├── Code.js              # Mã nguồn xử lý Webhook, lệnh Bot và REST API
-│   ├── SetupHelper.js       # Tích hợp Menu cài đặt tự động vào Google Sheets
+│   ├── Code.js              # Mã nguồn xử lý Webhook, lệnh Bot, AI, Bounty, RBAC & REST API
+│   ├── SetupHelper.js       # Tích hợp Menu cài đặt tự động 6 sheet Enterprise vào Google Sheets
 │   └── appsscript.json      # File cấu hình manifest của Apps Script
 ├── web-dashboard/
-│   ├── index.html           # Giao diện Web Dashboard & Telegram Mini App
-│   ├── styles.css           # Hiệu ứng Glassmorphism, animations và theme
-│   └── app.js               # Logic tương tác, lọc, tìm kiếm, kết nối API
+│   ├── index.html           # Giao diện Web Dashboard & Telegram Mini App Enterprise
+│   ├── styles.css           # Hiệu ứng Glassmorphism, huy hiệu Bounty vàng, Beta glow
+│   └── app.js               # Logic client: AI duplicate modal, task claim, bounty, RBAC
 ├── scripts/
 │   ├── setup_webhook.js     # Tool CLI Node.js cài đặt và kiểm tra Webhook
 │   ├── setup_webhook.py     # Tool CLI Python cài đặt Webhook
-│   └── test_simulator.js    # Bộ kiểm thử tự động (13 unit tests)
+│   └── test_simulator.js    # Bộ kiểm thử tự động toàn diện (10 suites, 48 assertions)
 ├── docs/
 │   ├── HUONG_DAN_CAI_DAT.md # Hướng dẫn cài đặt chi tiết từng bước từ A - Z
-│   ├── HUONG_DAN_ADMIN.md   # Hướng dẫn quản trị và phân quyền Admin
+│   ├── HUONG_DAN_ADMIN.md   # Hướng dẫn quản trị 4-tier RBAC và vòng đời phát triển
 │   └── TELEGRAM_BOTFATHER.md# Hướng dẫn tạo bot và cài đặt lệnh menu @BotFather
 ├── .gitignore               # Cấu hình bỏ qua tệp tạm
 ├── package.json             # Cấu hình NPM Scripts
@@ -91,14 +109,47 @@ Tool-Hunt/
 
 ---
 
+## 📌 Bảng Tra Cứu Lệnh Bot Telegram (Bot Commands)
+
+| Lệnh | Cú pháp | Vai trò tối thiểu | Mô tả chức năng |
+| :--- | :--- | :--- | :--- |
+| **Đăng ý tưởng** | `/idea [Tên Tool] \| [Mô tả chi tiết]` | `Member` | Gửi ý tưởng mới, kích hoạt kiểm tra AI trùng lặp |
+| **Treo thưởng** | `/bounty [ID] [Số tiền] [Đơn vị] [Lời nhắn]` | `Member` | Tài trợ/đặt hàng tool (VNĐ, Coffee ☕, USD) |
+| **Top Ý Tưởng** | `/top` | `Member` | Xem Top 5 ý tưởng có lượt vote cao nhất |
+| **Ý Tưởng Của Tôi** | `/myideas` | `Member` | Xem danh sách các ý tưởng do mình đề xuất |
+| **Thống Kê** | `/stats` | `Member` | Xem tổng số ý tưởng, vote và tổng quỹ thưởng |
+| **Nhận làm tool** | `/claim [ID]` hoặc nút `[ 🛠 Nhận làm tool ]` | `Developer` | Lập trình viên nhận phụ trách phát triển ý tưởng |
+| **Hủy nhận task** | `/unclaim [ID]` hoặc nút `[ ❌ Hủy nhận ]` | `Developer` (Owner) / `Manager` | Hủy nhận để nhả task cho dev khác |
+| **Đổi trạng thái** | `/status [ID] [Trạng thái mới]` | `Manager` / `Admin` | Quản trị viên cập nhật tiến độ ý tưởng |
+| **Trợ Giúp** | `/help` hoặc `/start` | `Member` | Xem danh sách hướng dẫn các lệnh hệ thống |
+
+---
+
+## ⚙️ Bảng Cấu Hình Hệ Thống (`Config` Sheet)
+
+| Khóa Cấu Hình (`Key`) | Giá Trị Mặc Định | Bắt Buộc | Mô Tả Chi Tiết |
+| :--- | :--- | :--- | :--- |
+| `BOT_TOKEN` | `""` | **Bắt buộc** | Mã token HTTP API cấp từ `@BotFather` |
+| `WEBAPP_URL` | `""` | Tùy chọn | URL Web Dashboard / Telegram Mini App đã deploy |
+| `COMMUNITY_GROUP_ID` | `""` | Tùy chọn | ID nhóm Telegram cộng đồng (dạng `-100xxxxxxxxx`) |
+| `ADMIN_IDS` | `""` | Tùy chọn | Danh sách User ID Admin dự phòng (phân cách bằng dấu phẩy) |
+| `AI_PROVIDER` | `deepseek` | Tùy chọn | Chọn nhà cung cấp AI chính: `deepseek` hoặc `gemini` |
+| `AI_SIMILARITY_THRESHOLD` | `75` | Tùy chọn | Ngưỡng % tương đồng để kích hoạt cảnh báo trùng lặp (0 - 100) |
+| `DEEPSEEK_API_KEY` | `""` | Khuyên dùng | API Key DeepSeek (`sk-...`) để quét ngữ nghĩa |
+| `GEMINI_API_KEY` | `""` | Khuyên dùng | API Key Google Gemini (miễn phí) dùng làm dự phòng failover |
+| `DEMO_BASE_URL` | `https://toolhunt.enterprise/demo/` | Tùy chọn | URL tiền tố cho bản demo trải nghiệm Beta |
+| `FEEDBACK_BASE_URL` | `https://toolhunt.enterprise/feedback/` | Tùy chọn | URL tiền tố cho form góp ý Beta |
+
+---
+
 ## 🚀 Hướng Dẫn Cài Đặt Nhanh (3 Phút)
 
 ### 1. Tạo Google Sheet & Thêm Code
 1. Tạo 1 file [Google Sheets mới](https://sheets.new).
-2. Vào menu **Tiện ích mở rộng** (Extensions) ➔ **Apps Script**.
+2. Vào menu **Tiện ích mở rộng (Extensions)** ➔ **Apps Script**.
 3. Dán mã nguồn từ [`google-apps-script/Code.js`](./google-apps-script/Code.js) và [`google-apps-script/SetupHelper.js`](./google-apps-script/SetupHelper.js) vào dự án Apps Script.
-4. F5 lại Google Sheet ➔ Bấm menu **`🤖 Quản Lý Bot Telegram`** ➔ Chọn **`⚡ 1. Khởi tạo cấu trúc các Sheet`**.
-5. Vào sheet `Config`, điền `BOT_TOKEN` của bạn (lấy từ `@BotFather`).
+4. F5 lại Google Sheet ➔ Bấm menu **`🤖 Quản Lý ToolHunt Enterprise`** ➔ Chọn **`⚡ 1. Khởi tạo cấu trúc 6 Sheet Enterprise`**.
+5. Vào sheet `Config`, điền `BOT_TOKEN` (lấy từ `@BotFather`), `DEEPSEEK_API_KEY` và `GEMINI_API_KEY`.
 
 ### 2. Triển khai Web App (Deploy)
 1. Tại Apps Script: Bấm **Triển khai (Deploy)** ➔ **Triển khai mới (New deployment)**.
@@ -108,66 +159,55 @@ Tool-Hunt/
 3. Bấm **Triển khai** và copy **URL ứng dụng web**.
 
 ### 3. Đăng ký Webhook
-1. Tại Google Sheet: Bấm menu **`🤖 Quản Lý Bot Telegram`** ➔ Chọn **`🔗 2. Đăng ký Webhook tự động`**.
-2. Dán link Web App URL vừa copy vào và nhấn **OK**.
+1. Tại Google Sheet: Bấm menu **`🤖 Quản Lý ToolHunt Enterprise`** ➔ Chọn **`🔗 2. Đăng ký Telegram Webhook tự động`**.
+2. Dán link Web App URL vừa copy ở Bước 2 vào và nhấn **OK**.
 3. Thêm Bot vào nhóm Telegram, cấp quyền Admin và bắt đầu sử dụng!
 
-👉 *Xem hướng dẫn chi tiết từng bước có hình ảnh minh họa tại: [`docs/HUONG_DAN_CAI_DAT.md`](./docs/HUONG_DAN_CAI_DAT.md)*
+👉 *Xem hướng dẫn chi tiết từng bước tại: [`docs/HUONG_DAN_CAI_DAT.md`](./docs/HUONG_DAN_CAI_DAT.md)*
 
 ---
 
-## 📌 Bảng Tra Cứu Lệnh Trong Nhóm (Bot Commands)
+## 🧪 Kiểm Thử Tự Động Toàn Diện (Automated Testing)
 
-| Lệnh | Cú pháp | Quyền hạn | Ví dụ |
-| :--- | :--- | :--- | :--- |
-| **Đăng ý tưởng** | `/idea [Tên Tool] \| [Mô tả]` | Tất cả thành viên | `/idea Auto Sheet \| Tool tự cào giá Shopee lưu vào Sheet` |
-| **Top Ý Tưởng** | `/top` | Tất cả thành viên | `/top` |
-| **Ý Tưởng Của Tôi** | `/myideas` | Tất cả thành viên | `/myideas` |
-| **Thống Kê** | `/stats` | Tất cả thành viên | `/stats` |
-| **Cập Nhật Tiến Độ** | `/status [ID] [Trạng thái]` | **Chỉ Admin** | `/status 1 Đang phát triển` |
-| **Trợ Giúp** | `/help` hoặc `/start` | Tất cả thành viên | `/help` |
+Chạy bộ kiểm thử tự động 10 Suites (48 assertions) kiểm tra 100% các kịch bản offline:
 
----
-
-## 🧪 Kiểm Thử Tự Động (Automated Testing)
-
-Dự án tích hợp sẵn Mock Simulator để kiểm tra logic mà không cần kết nối mạng hay Telegram thật:
-
-```bash
-# Chạy bộ Unit Tests
+```powershell
+# Chạy bộ test suite
 npm test
 
-# Hoặc chạy trực tiếp bằng Node.js
+# Hoặc chạy trực tiếp qua Node.js
 node scripts/test_simulator.js
 ```
 
-Kết quả kiểm thử mẫu:
+Kết quả kiểm thử thực tế:
 ```text
-======================================================
-🧪 CHẠY KIỂM THỬ TỰ ĐỘNG (UNIT TESTS & LOGIC SIMULATOR)
-======================================================
-🔹 1. Kiểm tra xác thực cú pháp /idea:
-  ✅ [PASS] Báo lỗi khi thiếu dấu gạch đứng (|)
-🔹 2. Kiểm tra tạo ý tưởng mới:
-  ✅ [PASS] Tạo thành công Idea #1 & #2
-🔹 3. Kiểm tra tính năng Upvote:
-  ✅ [PASS] Ghi nhận lượt vote chính xác (+1)
-🔹 4. Kiểm tra chống gian lận & Rút lại vote:
-  ✅ [PASS] Toggle Unvote thành công (-1)
-🔹 5. Kiểm tra bảng xếp hạng /top & /stats:
-  ✅ [PASS] Sắp xếp danh sách chính xác
-🔹 6. Kiểm tra phân quyền Admin /status:
-  ✅ [PASS] Chặn người dùng thường, Admin đổi trạng thái thành công
-------------------------------------------------------
-📊 KẾT QUẢ: 13 PASSED / 0 FAILED (100% SUCCESS)
-------------------------------------------------------
+================================================================================
+📊 KẾT QUẢ TỔNG QUAN KIỂM THỬ (SUMMARY REPORT)
+================================================================================
+⏱️ Thời gian thực thi: ~30ms
+📋 Tổng số bài kiểm thử: 48 assertions across 10 test suites
+
+  ✅ Suite 1: Syntax & Command Validation                 -> 4 passed / 0 failed
+  ✅ Suite 2: Idea Creation & Telegram Card Formatting    -> 4 passed / 0 failed
+  ✅ Suite 3: R1 AI Duplicate Detection                   -> 6 passed / 0 failed
+  ✅ Suite 4: Upvote & Anti-Fraud (Toggle Unvote)         -> 5 passed / 0 failed
+  ✅ Suite 5: R2 Developer Task Claiming Lifecycle        -> 6 passed / 0 failed
+  ✅ Suite 6: R3 Targeted Beta Notifications              -> 4 passed / 0 failed
+  ✅ Suite 7: R4 Tool Bounty & Crowdfunding               -> 5 passed / 0 failed
+  ✅ Suite 8: R5 4-Tier RBAC Permission Matrix            -> 4 passed / 0 failed
+  ✅ Suite 9: R5 REST API Contracts                       -> 6 passed / 0 failed
+  ✅ Suite 10: R5 Dual-Platform Sync & Concurrency        -> 4 passed / 0 failed
+--------------------------------------------------------------------------------
+🎯 TỔNG KẾT: 48 PASSED / 0 FAILED (100% SUCCESS)
+🎉 TẤT CẢ 10 BỘ KIỂM THỬ ĐÃ VƯỢT QUA 100%! HỆ THỐNG SẴN SÀNG TRIỂN KHAI.
+================================================================================
 ```
 
 ---
 
 ## 🤝 Đóng Góp (Contributing)
 
-Mọi đóng góp nhằm nâng cao tính năng cho **ToolHunt** đều được chào đón nồng nhiệt!
+Mọi đóng góp nhằm nâng cao tính năng cho **ToolHunt Enterprise** đều được chào đón nồng nhiệt!
 1. Fork dự án (`git clone https://github.com/tinycorn-studio/Tool-Hunt.git`)
 2. Tạo nhánh tính năng mới (`git checkout -b feature/tinh-nang-moi`)
 3. Commit thay đổi (`git commit -m 'Add: Tính năng mới'`)

@@ -57,7 +57,7 @@ function requestTelegram(token, method, payload = null) {
 
 async function main() {
   console.log('\n======================================================');
-  console.log('🤖 TELEGRAM IDEA BOT - CÔNG CỤ CÀI ĐẶT WEBHOOK');
+  console.log('🤖 TOOLHUNT ENTERPRISE - CÔNG CỤ CÀI ĐẶT WEBHOOK');
   console.log('======================================================\n');
 
   // Lấy arguments từ CLI nếu có
