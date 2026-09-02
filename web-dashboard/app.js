@@ -89,6 +89,13 @@ const DEMO_IDEAS = [
 ];
 
 function generateLocalUserId() {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    const rand = (100000 + (array[0] % 900000)).toString();
+    localStorage.setItem("TG_LOCAL_USER_ID", rand);
+    return rand;
+  }
   const rand = Math.floor(100000 + Math.random() * 900000).toString();
   localStorage.setItem("TG_LOCAL_USER_ID", rand);
   return rand;
@@ -120,6 +127,27 @@ function initTelegramWebApp() {
       if (inputAuthor) inputAuthor.value = STATE.currentUser.username;
     }
   }
+}
+
+function getTelegramInitData() {
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+    return window.Telegram.WebApp.initData;
+  }
+  return "";
+}
+
+async function postApiRequest(payload) {
+  if (!STATE.apiUrl) return null;
+  const initData = getTelegramInitData();
+  const enrichedPayload = {
+    ...payload,
+    initData: initData || undefined
+  };
+  return await fetch(STATE.apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(enrichedPayload)
+  });
 }
 
 function triggerHaptic(type = "light") {
@@ -320,8 +348,8 @@ function renderIdeas() {
       <!-- ACTION BUTTONS BAR: BOUNTY & DEVELOPER CLAIM -->
       <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/60 text-xs">
         <div class="flex items-center space-x-2">
-          <!-- Bounty Pledge Button -->
-          <button onclick="openBountyModal(${idea.id}, '${escapeHtml(idea.title.replace(/'/g, "\\'"))}')" class="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-semibold flex items-center space-x-1 transition-all">
+          <!-- Bounty Pledge Button (SEC-HIGH-02) -->
+          <button onclick="openBountyModal(${idea.id})" class="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-semibold flex items-center space-x-1 transition-all">
             <i class="fa-solid fa-sack-dollar text-amber-400"></i>
             <span>Treo thưởng</span>
           </button>
@@ -435,15 +463,11 @@ async function handleVote(ideaId) {
 
   if (STATE.apiUrl) {
     try {
-      await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "voteIdea",
-          ideaId: ideaId,
-          userId: STATE.currentUser.id,
-          username: STATE.currentUser.username
-        })
+      await postApiRequest({
+        apiAction: "voteIdea",
+        ideaId: ideaId,
+        userId: STATE.currentUser.id,
+        username: STATE.currentUser.username
       });
     } catch (err) {
       console.warn("Không thể đồng bộ vote lên server:", err);
@@ -468,15 +492,11 @@ async function handleClaimTask(ideaId) {
 
   if (STATE.apiUrl) {
     try {
-      await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "claimIdea",
-          ideaId: ideaId,
-          userId: STATE.currentUser.id,
-          username: STATE.currentUser.username
-        })
+      await postApiRequest({
+        apiAction: "claimIdea",
+        ideaId: ideaId,
+        userId: STATE.currentUser.id,
+        username: STATE.currentUser.username
       });
     } catch (err) {
       console.warn("Lỗi đồng bộ claim:", err);
@@ -501,15 +521,11 @@ async function handleUnclaimTask(ideaId) {
 
   if (STATE.apiUrl) {
     try {
-      await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "unclaimIdea",
-          ideaId: ideaId,
-          userId: STATE.currentUser.id,
-          username: STATE.currentUser.username
-        })
+      await postApiRequest({
+        apiAction: "unclaimIdea",
+        ideaId: ideaId,
+        userId: STATE.currentUser.id,
+        username: STATE.currentUser.username
       });
     } catch (err) {
       console.warn("Lỗi đồng bộ unclaim:", err);
@@ -532,17 +548,13 @@ async function handleDevTransition(ideaId, targetStatus) {
 
   if (STATE.apiUrl) {
     try {
-      await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "updateProgress",
-          ideaId: ideaId,
-          userId: STATE.currentUser.id,
-          username: STATE.currentUser.username,
-          targetStatus: targetStatus,
-          milestone: idea.milestones
-        })
+      await postApiRequest({
+        apiAction: "updateProgress",
+        ideaId: ideaId,
+        userId: STATE.currentUser.id,
+        username: STATE.currentUser.username,
+        targetStatus: targetStatus,
+        milestone: idea.milestones
       });
     } catch (err) {
       console.warn("Lỗi update progress:", err);
@@ -593,17 +605,15 @@ document.getElementById("formSubmitIdea").addEventListener("submit", async (e) =
 async function checkDuplicate(draft) {
   if (STATE.apiUrl) {
     try {
-      const res = await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "checkDuplicate",
-          title: draft.title,
-          description: draft.description
-        })
+      const res = await postApiRequest({
+        apiAction: "checkDuplicate",
+        title: draft.title,
+        description: draft.description
       });
-      const json = await res.json();
-      if (json.ok && json.duplicateCheck) return json.duplicateCheck;
+      if (res) {
+        const json = await res.json();
+        if (json.ok && json.duplicateCheck) return json.duplicateCheck;
+      }
     } catch (e) {
       console.warn("Lỗi checkDuplicate API, dùng client heuristic fallback:", e);
     }
@@ -698,20 +708,18 @@ async function executeSubmitIdea(draft) {
 
   if (STATE.apiUrl) {
     try {
-      const res = await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "submitIdea",
-          title: draft.title,
-          description: draft.description,
-          category: draft.category,
-          username: draft.author,
-          userId: draft.userId
-        })
+      const res = await postApiRequest({
+        apiAction: "submitIdea",
+        title: draft.title,
+        description: draft.description,
+        category: draft.category,
+        username: draft.author,
+        userId: draft.userId
       });
-      const json = await res.json();
-      if (json.ok && json.ideaId) newIdea.id = json.ideaId;
+      if (res) {
+        const json = await res.json();
+        if (json.ok && json.ideaId) newIdea.id = json.ideaId;
+      }
     } catch (err) {
       console.warn("Lỗi gửi API:", err);
     }
@@ -732,8 +740,10 @@ async function executeSubmitIdea(draft) {
 // BOUNTY PLEDGE FORM (R4)
 function openBountyModal(ideaId, ideaTitle) {
   STATE.activeBountyTargetIdeaId = ideaId;
+  const target = STATE.ideas.find(i => i.id === ideaId);
+  const title = ideaTitle || (target ? target.title : "");
   document.getElementById("bountyTargetIdeaId").value = ideaId;
-  document.getElementById("bountyModalTargetTitle").innerText = `#${ideaId} — ${ideaTitle}`;
+  document.getElementById("bountyModalTargetTitle").textContent = `#${ideaId} — ${title}`;
   document.getElementById("inputBountySponsor").value = STATE.currentUser.username;
   
   const modal = document.getElementById("modalBountyPledge");
@@ -764,18 +774,14 @@ document.getElementById("formPledgeBounty").addEventListener("submit", async (e)
 
   if (STATE.apiUrl) {
     try {
-      await fetch(STATE.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          apiAction: "pledgeBounty",
-          ideaId: ideaId,
-          userId: STATE.currentUser.id,
-          username: sponsor,
-          amount: amount,
-          unit: unit,
-          message: message
-        })
+      await postApiRequest({
+        apiAction: "pledgeBounty",
+        ideaId: ideaId,
+        userId: STATE.currentUser.id,
+        username: sponsor,
+        amount: amount,
+        unit: unit,
+        message: message
       });
     } catch (err) {
       console.warn("Lỗi gửi bounty:", err);

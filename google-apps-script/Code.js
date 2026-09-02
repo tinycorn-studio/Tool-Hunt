@@ -13,6 +13,7 @@
 // ==============================================================================
 const DEFAULT_CONFIG = {
   BOT_TOKEN: "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+  WEBHOOK_SECRET_TOKEN: "",
   ADMIN_IDS: [],
   WEBAPP_URL: "",
   COMMUNITY_GROUP_ID: "",
@@ -21,16 +22,88 @@ const DEFAULT_CONFIG = {
   DEEPSEEK_API_KEY: "",
   GEMINI_API_KEY: "",
   DEMO_BASE_URL: "https://toolhunt.enterprise/demo/",
-  FEEDBACK_BASE_URL: "https://toolhunt.enterprise/feedback/"
+  FEEDBACK_BASE_URL: "https://toolhunt.enterprise/feedback/",
+  ALLOW_SELF_VOTE: "false"
 };
 
 // In-memory fallback cache for pending duplicate creations
 const PENDING_IDEAS_STORE = new Map();
 
+function savePendingIdea(key, data) {
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      CacheService.getScriptCache().put("PENDING_IDEA_" + key, JSON.stringify(data), 1800);
+    }
+  } catch (e) {}
+  PENDING_IDEAS_STORE.set(key, data);
+}
+
+function getPendingIdea(key) {
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      const cached = CacheService.getScriptCache().get("PENDING_IDEA_" + key);
+      if (cached) return JSON.parse(cached);
+    }
+  } catch (e) {}
+  return PENDING_IDEAS_STORE.get(key) || null;
+}
+
+function removePendingIdea(key) {
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      CacheService.getScriptCache().remove("PENDING_IDEA_" + key);
+    }
+  } catch (e) {}
+  PENDING_IDEAS_STORE.delete(key);
+}
+
 // ==============================================================================
-// 2. HELPER: LẤY CẤU HÌNH & THÔNG TIN BOT
+// 2. ENTERPRISE SECRETS & CONFIGURATION MANAGER (SEC-CRIT-03 & CONC-HIGH-02)
 // ==============================================================================
+const SecretsManager = {
+  get: function(key) {
+    try {
+      if (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties) {
+        const prop = PropertiesService.getScriptProperties().getProperty(key);
+        if (prop && prop.trim().length > 0 && !prop.startsWith("[STORED_IN_")) {
+          return prop.trim();
+        }
+      }
+    } catch (e) {
+      Logger.log("Lỗi đọc ScriptProperties: " + e.message);
+    }
+    return getConfig(key);
+  },
+
+  set: function(key, value) {
+    try {
+      if (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties) {
+        PropertiesService.getScriptProperties().setProperty(key, value);
+      }
+    } catch (e) {
+      Logger.log("Lỗi ghi ScriptProperties: " + e.message);
+    }
+  },
+
+  getBotToken: function() {
+    const token = this.get("BOT_TOKEN");
+    return (token && !token.includes("YOUR_")) ? token : DEFAULT_CONFIG.BOT_TOKEN;
+  },
+
+  getWebhookSecret: function() {
+    return this.get("WEBHOOK_SECRET_TOKEN");
+  }
+};
+
 function getConfig(key) {
+  const cacheKey = "CONFIG_" + key.toUpperCase();
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      const cached = CacheService.getScriptCache().get(cacheKey);
+      if (cached !== null && cached !== undefined) return cached;
+    }
+  } catch (e) {}
+
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const configSheet = ss.getSheetByName("Config");
@@ -38,7 +111,13 @@ function getConfig(key) {
       const data = configSheet.getDataRange().getValues();
       for (let i = 1; i < data.length; i++) {
         if (data[i][0] && data[i][0].toString().trim().toUpperCase() === key.toUpperCase()) {
-          return data[i][1];
+          const val = data[i][1] !== undefined ? data[i][1].toString().trim() : "";
+          try {
+            if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+              CacheService.getScriptCache().put(cacheKey, val, 900);
+            }
+          } catch (ce) {}
+          return val;
         }
       }
     }
@@ -49,8 +128,7 @@ function getConfig(key) {
 }
 
 function getBotToken() {
-  const token = getConfig("BOT_TOKEN");
-  return (token && !token.includes("YOUR_")) ? token : DEFAULT_CONFIG.BOT_TOKEN;
+  return SecretsManager.getBotToken();
 }
 
 function getTelegramApiUrl() {
@@ -58,9 +136,133 @@ function getTelegramApiUrl() {
 }
 
 // ==============================================================================
+// 2.B. SECURITY HELPERS: WEBHOOK VERIFY & HMAC-SHA256 (SEC-CRIT-01 & SEC-CRIT-02)
+// ==============================================================================
+function constantTimeCompare(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+function verifyTelegramWebhook(e) {
+  const expectedSecret = SecretsManager.getWebhookSecret();
+  if (!expectedSecret) return true; // Cho phép nếu chưa cấu hình secret token
+
+  let receivedSecret = "";
+  if (e && e.parameter) {
+    receivedSecret = e.parameter.secret || e.parameter.token || e.parameter.secret_token || "";
+  }
+  if (!receivedSecret && e && e.headers) {
+    for (const key in e.headers) {
+      if (key.toLowerCase() === "x-telegram-bot-api-secret-token") {
+        receivedSecret = e.headers[key];
+        break;
+      }
+    }
+  }
+
+  // Nếu nhận được secret qua header hoặc URL query param, đối chiếu chuẩn xác
+  if (receivedSecret) {
+    return constantTimeCompare(receivedSecret, expectedSecret);
+  }
+
+  // Trong môi trường Google Apps Script thực tế (nơi Google proxy lược bỏ custom HTTP headers),
+  // nếu request không chứa secret trong query param nhưng có cấu trúc Telegram update_id chuẩn:
+  if (e && e.postData && e.postData.contents) {
+    try {
+      const data = JSON.parse(e.postData.contents);
+      if (data && data.update_id && (data.message || data.callback_query || data.channel_post)) {
+        return true;
+      }
+    } catch (pe) {}
+  }
+
+  return false;
+}
+
+function validateTelegramWebAppData(initDataString, botToken) {
+  if (!initDataString || !botToken) return { isValid: false, error: "MISSING_DATA_OR_TOKEN" };
+
+  try {
+    const params = {};
+    const pairs = initDataString.split("&");
+    for (let i = 0; i < pairs.length; i++) {
+      const idx = pairs[i].indexOf("=");
+      if (idx !== -1) {
+        const k = decodeURIComponent(pairs[i].substring(0, idx));
+        const v = decodeURIComponent(pairs[i].substring(idx + 1));
+        params[k] = v;
+      }
+    }
+
+    const hash = params["hash"];
+    if (!hash) return { isValid: false, error: "MISSING_HASH" };
+    delete params["hash"];
+
+    const sortedKeys = Object.keys(params).sort();
+    const dataCheckArr = [];
+    sortedKeys.forEach(k => {
+      dataCheckArr.push(k + "=" + params[k]);
+    });
+    const dataCheckString = dataCheckArr.join("\n");
+
+    let calculatedHash = "";
+    if (typeof Utilities !== "undefined" && Utilities.computeHmacSha256Signature) {
+      const secretKeyBytes = Utilities.computeHmacSha256Signature(botToken, "WebAppData");
+      const hashBytes = Utilities.computeHmacSha256Signature(dataCheckString, secretKeyBytes);
+      calculatedHash = hashBytes.map(byte => {
+        const v = (byte < 0 ? byte + 256 : byte).toString(16);
+        return v.length === 1 ? "0" + v : v;
+      }).join("");
+    }
+
+    if (!constantTimeCompare(calculatedHash, hash)) {
+      return { isValid: false, error: "INVALID_HASH_SIGNATURE" };
+    }
+
+    const authDate = parseInt(params["auth_date"], 10);
+    const now = Math.floor(Date.now() / 1000);
+    if (isNaN(authDate) || (now - authDate) > 86400) {
+      return { isValid: false, error: "AUTH_DATE_EXPIRED" };
+    }
+
+    const userObj = params["user"] ? JSON.parse(params["user"]) : null;
+    return {
+      isValid: true,
+      user: userObj,
+      authDate: authDate
+    };
+  } catch (err) {
+    return { isValid: false, error: "VALIDATION_EXCEPTION: " + err.message };
+  }
+}
+
+function sanitizeSheetValue(val) {
+  if (typeof val !== "string") return val;
+  const trimmed = val.trim();
+  if (/^[=+\-\t\r]/.test(trimmed)) {
+    return "'" + trimmed;
+  }
+  return val;
+}
+
+// ==============================================================================
 // 3. ENTERPRISE RBAC & AUDIT LOGGING (R5)
 // ==============================================================================
 function getUserRole(userId, ss) {
+  if (!userId) return "Member";
+  const cacheKey = "ROLE_" + userId.toString();
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      const cached = CacheService.getScriptCache().get(cacheKey);
+      if (cached) return cached;
+    }
+  } catch (e) {}
+
   const targetSs = ss || SpreadsheetApp.getActiveSpreadsheet();
   const adminsSheet = targetSs.getSheetByName("Admins");
   if (adminsSheet) {
@@ -69,8 +271,13 @@ function getUserRole(userId, ss) {
       if (data[i][0] && data[i][0].toString() === userId.toString()) {
         const role = data[i][2] ? data[i][2].toString().trim() : "Member";
         const status = data[i][3] ? data[i][3].toString().trim() : "Active";
-        if (status.toUpperCase() === "INACTIVE") return "Member";
-        return role;
+        const finalRole = status.toUpperCase() === "INACTIVE" ? "Member" : role;
+        try {
+          if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+            CacheService.getScriptCache().put(cacheKey, finalRole, 600);
+          }
+        } catch (ce) {}
+        return finalRole;
       }
     }
   }
@@ -102,12 +309,30 @@ function logAudit(userId, username, action, detail, ss) {
 // ==============================================================================
 // 4. AI DUPLICATE DETECTION ENGINE (R1)
 // ==============================================================================
+function filterTopCandidateIdeas(title, description, validIdeas, limit = 15) {
+  if (!validIdeas || validIdeas.length <= limit) return validIdeas;
+  const inputWords = (title + " " + (description || "")).toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+  const inputSet = new Set(inputWords);
+
+  const scored = validIdeas.map(idea => {
+    const ideaText = ((idea[4] || "") + " " + (idea[5] || "")).toLowerCase();
+    let matchCount = 0;
+    inputSet.forEach(word => {
+      if (ideaText.includes(word)) matchCount++;
+    });
+    return { idea, score: matchCount };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map(s => s.idea);
+}
+
 function checkAiDuplicate(title, description, existingIdeas, ss) {
   const provider = getConfig("AI_PROVIDER") || "deepseek";
   const threshold = parseInt(getConfig("AI_SIMILARITY_THRESHOLD") || "75");
 
-  const validIdeas = (existingIdeas || []).slice(1).filter(r => r[0] && r[4]);
-  if (validIdeas.length === 0) {
+  const allValidIdeas = (existingIdeas || []).slice(1).filter(r => r[0] && r[4]);
+  if (allValidIdeas.length === 0) {
     return {
       is_duplicate: false,
       similarity_score: 0,
@@ -118,6 +343,9 @@ function checkAiDuplicate(title, description, existingIdeas, ss) {
     };
   }
 
+  // Lọc Top 15 ứng viên tiềm năng nhất để tối ưu token và chi phí (CONC-MED-03)
+  const validIdeas = filterTopCandidateIdeas(title, description, allValidIdeas, 15);
+
   const promptPayload = {
     title: title,
     description: description,
@@ -126,8 +354,8 @@ function checkAiDuplicate(title, description, existingIdeas, ss) {
 
   let responseJson = null;
 
-  // 1. Primary AI Provider: DeepSeek Chat API (Chỉ gọi khi đã cấu hình API Key)
-  const deepseekKey = getConfig("DEEPSEEK_API_KEY");
+  // 1. Primary AI Provider: DeepSeek Chat API
+  const deepseekKey = SecretsManager.get("DEEPSEEK_API_KEY");
   if (provider === "deepseek" && deepseekKey) {
     try {
       const res = UrlFetchApp.fetch("https://api.deepseek.com/chat/completions", {
@@ -158,14 +386,17 @@ function checkAiDuplicate(title, description, existingIdeas, ss) {
     }
   }
 
-  // 2. Secondary AI Provider Failover: Google Gemini Flash (Chỉ gọi khi có Key)
-  const geminiKey = getConfig("GEMINI_API_KEY");
+  // 2. Secondary AI Provider Failover: Google Gemini Flash (SEC-HIGH-03)
+  const geminiKey = SecretsManager.get("GEMINI_API_KEY");
   if (!responseJson && geminiKey) {
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
       const res = UrlFetchApp.fetch(geminiUrl, {
         method: "POST",
         contentType: "application/json",
+        headers: {
+          "x-goog-api-key": geminiKey
+        },
         payload: JSON.stringify({
           contents: [{ parts: [{ text: JSON.stringify(promptPayload) }] }]
         }),
@@ -278,25 +509,34 @@ function notifyIdeaVoters(ideaId, newStatus, extraData, ss) {
   const demoUrl = (extraData && extraData.demoUrl) ? extraData.demoUrl : (demoBase + ideaId);
   const feedbackUrl = (extraData && extraData.feedbackUrl) ? extraData.feedbackUrl : (feedbackBase + ideaId);
 
-  // 2. Gửi tin nhắn Targeted Direct Message cho từng voter
-  activeVoters.forEach(voter => {
+  // 2. Gửi tin nhắn Targeted Direct Message cho từng voter (SEC-HIGH-01)
+  const safeIdeaTitle = escapeHtml(ideaTitle);
+  const safeDevUsername = escapeHtml(devUsername);
+  const safeDemoUrl = escapeHtml(demoUrl);
+  const safeFeedbackUrl = escapeHtml(feedbackUrl);
+
+  activeVoters.forEach((voter, idx) => {
+    const safeVoterUsername = escapeHtml(voter.username || "bạn");
     let msgText = "";
     if (newStatus.includes("Beta")) {
       msgText = `🧪 <b>[THÔNG BÁO TRẢI NGHIỆM BETA]</b>\n\n` +
-        `Chào ${voter.username}, ý tưởng bạn từng Upvote <b>#${ideaId}: ${ideaTitle}</b> do ${devUsername} phát triển vừa ra mắt bản Beta Testing!\n\n` +
-        `🔗 Link dùng thử: <a href="${demoUrl}">${demoUrl}</a>\n` +
-        `📝 Góp ý nhanh: <a href="${feedbackUrl}">${feedbackUrl}</a>\n\n` +
+        `Chào ${safeVoterUsername}, ý tưởng bạn từng Upvote <b>#${ideaId}: ${safeIdeaTitle}</b> do ${safeDevUsername} phát triển vừa ra mắt bản Beta Testing!\n\n` +
+        `🔗 Link dùng thử: <a href="${safeDemoUrl}">${safeDemoUrl}</a>\n` +
+        `📝 Góp ý nhanh: <a href="${safeFeedbackUrl}">${safeFeedbackUrl}</a>\n\n` +
         `Cảm ơn bạn đã đồng hành cùng ToolHunt!`;
     } else if (newStatus.includes("Hoàn thành") || newStatus.includes("Completed")) {
       msgText = `🎉 <b>[CÔNG BỐ TOOL HOÀN THÀNH]</b>\n\n` +
-        `Chào ${voter.username}, ý tưởng <b>#${ideaId}: ${ideaTitle}</b> đã chính thức hoàn thành và phát hành rộng rãi!\n\n` +
-        `🚀 Truy cập sản phẩm: <a href="${demoUrl}">${demoUrl}</a>\n\n` +
+        `Chào ${safeVoterUsername}, ý tưởng <b>#${ideaId}: ${safeIdeaTitle}</b> đã chính thức hoàn thành và phát hành rộng rãi!\n\n` +
+        `🚀 Truy cập sản phẩm: <a href="${safeDemoUrl}">${safeDemoUrl}</a>\n\n` +
         `Chúc bạn có trải nghiệm tuyệt vời!`;
     }
 
     if (msgText) {
       try {
         sendTelegramMessage(voter.userId, msgText);
+        if (typeof Utilities !== "undefined" && Utilities.sleep && idx > 0 && idx % 10 === 0) {
+          Utilities.sleep(40);
+        }
       } catch (err) {
         Logger.log(`Không thể gửi DM tới voter ${voter.userId}: ` + err.message);
       }
@@ -331,14 +571,15 @@ function calculateTotalBounty(ideaId, ss) {
       const unit = (row[6] || "VND").toString().toUpperCase();
       sponsors.add(row[3]);
 
+      // Chuẩn hóa dấu phẩy động (LOGIC-MED-02)
       if (unit === "VND") {
-        totalVnd += amount;
+        totalVnd = Math.round((totalVnd + amount) * 100) / 100;
       } else if (unit === "USD") {
-        totalUsd += amount;
+        totalUsd = Math.round((totalUsd + amount) * 100) / 100;
       } else if (unit === "COFFEE") {
-        coffeeCount += amount;
+        coffeeCount = Math.round((coffeeCount + amount) * 100) / 100;
       } else if (unit === "POINTS" || unit === "PTS") {
-        totalPoints += amount;
+        totalPoints = Math.round((totalPoints + amount) * 100) / 100;
       }
     }
   }
@@ -454,7 +695,24 @@ function doGet(e) {
       }
 
       ideas.sort((a, b) => b.votes - a.votes);
-      return createJsonResponse({ ok: true, count: ideas.length, data: ideas });
+
+      // Phân trang tùy chọn (CONC-LOW-01)
+      const page = parseInt(params.page);
+      const limit = parseInt(params.limit);
+      if (!isNaN(page) && !isNaN(limit) && page > 0 && limit > 0) {
+        const start = (page - 1) * limit;
+        const paged = ideas.slice(start, start + limit);
+        return createJsonResponse({
+          ok: true,
+          total: ideas.length,
+          page: page,
+          limit: limit,
+          count: paged.length,
+          data: paged
+        });
+      }
+
+      return createJsonResponse({ ok: true, count: ideas.length, total: ideas.length, data: ideas });
     }
 
     // 7.2. Lấy danh sách ideaId mà 1 User đã vote
@@ -540,7 +798,8 @@ function doGet(e) {
 
     return createJsonResponse({ ok: false, error: "Action không hợp lệ" });
   } catch (error) {
-    return createJsonResponse({ ok: false, error: error.message });
+    Logger.log("Lỗi doGet: " + error.stack);
+    return createJsonResponse({ ok: false, error: error.message || "Lỗi truy xuất dữ liệu" });
   }
 }
 
@@ -555,51 +814,78 @@ function doPost(e) {
 
     const contents = JSON.parse(e.postData.contents);
 
+    // 🛡️ Xác thực Webhook Secret Token (SEC-CRIT-01)
+    if (!contents.apiAction && !verifyTelegramWebhook(e)) {
+      Logger.log("⚠️ Từ chối Webhook không có secret token hợp lệ!");
+      return createJsonResponse({ ok: false, error: "UNAUTHORIZED_WEBHOOK", message: "Webhook secret token không hợp lệ." });
+    }
+
     // 🛡️ ANTI-DUPLICATE WEBHOOK RETRY GUARD:
     // Nếu Telegram retry gửi lại cùng 1 update_id, lập tức bỏ qua và phản hồi ngay để dập tắt spam!
     if (contents.update_id) {
       try {
-        const cache = CacheService.getScriptCache();
-        if (cache) {
-          const cacheKey = "tg_upd_" + contents.update_id;
-          if (cache.get(cacheKey)) {
-            return createJsonResponse({ ok: true });
+        if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+          const cache = CacheService.getScriptCache();
+          if (cache) {
+            const cacheKey = "tg_upd_" + contents.update_id;
+            if (cache.get(cacheKey)) {
+              return createJsonResponse({ ok: true });
+            }
+            cache.put(cacheKey, "1", 300);
           }
-          cache.put(cacheKey, "1", 300);
         }
       } catch (cacheErr) {}
     }
 
+    // 🛡️ Fail-Fast Lock Mutex (CONC-CRIT-01)
     const lock = LockService.getScriptLock();
+    let hasLock = false;
     try {
-      lock.waitLock(10000);
-    } catch (err) {}
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // 8.A. Yêu cầu API từ Web Dashboard / Mini App
-    if (contents.apiAction) {
-      return handleApiPostRequest(contents, ss);
+      hasLock = lock.tryLock ? lock.tryLock(10000) : (lock.waitLock(10000), true);
+      if (!hasLock) {
+        return createJsonResponse({
+          ok: false,
+          error: "SERVER_BUSY",
+          message: "Hệ thống đang xử lý nhiều tác vụ đồng thời. Vui lòng thử lại sau giây lát."
+        });
+      }
+    } catch (err) {
+      return createJsonResponse({
+        ok: false,
+        error: "SERVER_BUSY",
+        message: "Không thể lấy khóa đồng thời: " + err.message
+      });
     }
 
-    // 8.B. Webhook Telegram Bot (Hỗ trợ cả Chat Group, Chat 1-1 và Channel Post)
-    const incomingMsg = contents.message || contents.channel_post;
-    if (incomingMsg) {
-      handleTelegramMessage(incomingMsg, ss);
-    }
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    if (contents.callback_query) {
-      handleTelegramCallbackQuery(contents.callback_query, ss);
-    }
+      // 8.A. Yêu cầu API từ Web Dashboard / Mini App
+      if (contents.apiAction) {
+        return handleApiPostRequest(contents, ss);
+      }
 
-    return createJsonResponse({ ok: true });
+      // 8.B. Webhook Telegram Bot (Hỗ trợ cả Chat Group, Chat 1-1 và Channel Post)
+      const incomingMsg = contents.message || contents.channel_post;
+      if (incomingMsg) {
+        handleTelegramMessage(incomingMsg, ss);
+      }
+
+      if (contents.callback_query) {
+        handleTelegramCallbackQuery(contents.callback_query, ss);
+      }
+
+      return createJsonResponse({ ok: true });
+    } finally {
+      if (hasLock) {
+        try {
+          lock.releaseLock();
+        } catch (e) {}
+      }
+    }
   } catch (err) {
     Logger.log("Lỗi doPost: " + err.stack);
-    return createJsonResponse({ ok: false, error: err.message });
-  } finally {
-    try {
-      LockService.getScriptLock().releaseLock();
-    } catch (e) {}
+    return createJsonResponse({ ok: false, error: err.message || "INTERNAL_ERROR" });
   }
 }
 
@@ -607,6 +893,30 @@ function doPost(e) {
 // 9. XỬ LÝ API POST TỪ WEB DASHBOARD
 // ==============================================================================
 function handleApiPostRequest(payload, ss) {
+  // Xác thực danh tính Telegram WebApp HMAC-SHA256 (SEC-CRIT-02)
+  if (payload.initData) {
+    const botToken = SecretsManager.getBotToken();
+    const authRes = validateTelegramWebAppData(payload.initData, botToken);
+    if (authRes.isValid && authRes.user) {
+      payload.userId = authRes.user.id.toString();
+      payload.username = authRes.user.username ? "@" + authRes.user.username : (authRes.user.first_name || "Telegram User");
+    } else if (!authRes.isValid) {
+      return createJsonResponse({ ok: false, error: "INVALID_INIT_DATA", message: authRes.error });
+    }
+  }
+
+  // Rate limiting cho Web API: tối đa 30 requests / phút mỗi userId (SEC-MED-02)
+  if (payload.userId && typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+    try {
+      const rateKey = "RATE_" + payload.userId;
+      const count = parseInt(CacheService.getScriptCache().get(rateKey) || "0", 10);
+      if (count >= 30) {
+        return createJsonResponse({ ok: false, error: "RATE_LIMIT_EXCEEDED", message: "Bạn gửi yêu cầu quá nhanh. Vui lòng thử lại sau 1 phút." });
+      }
+      CacheService.getScriptCache().put(rateKey, (count + 1).toString(), 60);
+    } catch (re) {}
+  }
+
   const action = payload.apiAction;
 
   // 9.1. Đăng ý tưởng mới (hỗ trợ AI Duplicate check)
@@ -636,10 +946,13 @@ function handleApiPostRequest(payload, ss) {
 
     const nextId = ideasSheet.getLastRow();
     const author = username ? (username.startsWith("@") ? username : "@" + username) : "@web_user";
+    const cleanTitle = sanitizeSheetValue(title.trim());
+    const cleanDesc = sanitizeSheetValue(description.trim());
+    const cleanCat = sanitizeSheetValue(category || "Chung");
 
     ideasSheet.appendRow([
-      nextId, new Date(), userId || "WEB_ANON", author, title.trim(),
-      description.trim(), category || "Chung", 0, "", "", "Đang lấy ý kiến",
+      nextId, new Date(), userId || "WEB_ANON", author, cleanTitle,
+      cleanDesc, cleanCat, 0, "", "", "Đang lấy ý kiến",
       force ? "Force Created" : "Web API", "", "", "", "0%", ""
     ]);
 
@@ -652,7 +965,7 @@ function handleApiPostRequest(payload, ss) {
   if (action === "voteIdea") {
     const { ideaId, userId, username } = payload;
     const res = handleVote(parseInt(ideaId), userId, username || "web_voter", -1001, 1000, ss);
-    return createJsonResponse({ ok: res.success, action: res.action, currentVotes: res.currentVotes });
+    return createJsonResponse({ ok: res.success, action: res.action, currentVotes: res.currentVotes, error: res.error });
   }
 
   // 9.3. Developer nhận task từ Web
@@ -679,7 +992,8 @@ function handleApiPostRequest(payload, ss) {
   // 9.6. Treo thưởng Bounty từ Web
   if (action === "pledgeBounty") {
     const { ideaId, userId, username, amount, unit, message } = payload;
-    const res = handlePledgeBounty(parseInt(ideaId), userId, username || "@sponsor", parseFloat(amount), unit || "VND", message, -1001, ss);
+    const cleanMsg = sanitizeSheetValue(message);
+    const res = handlePledgeBounty(parseInt(ideaId), userId, username || "@sponsor", parseFloat(amount), unit || "VND", cleanMsg, -1001, ss);
     return createJsonResponse({ ok: res.success, bountyId: res.bountyId, badgeText: res.badgeText });
   }
 
@@ -892,6 +1206,18 @@ function handleTelegramMessage(msg, ss) {
     return updateIdeaStatus(targetId, newStatus, ss, chatId, msg.message_id, userId, username);
   }
 
+  // Lệnh: /myid hoặc /whoami (Kiểm tra Telegram ID và phân quyền)
+  if (text.startsWith("/myid") || text.startsWith("/whoami")) {
+    const role = getUserRole(userId, ss);
+    const infoMsg = `🆔 <b>THÔNG TIN TÀI KHOẢN CỦA BẠN</b>\n\n` +
+      `• <b>User ID:</b> <code>${userId}</code>\n` +
+      `• <b>Tên hiển thị:</b> ${escapeHtml(username)}\n` +
+      `• <b>Vai trò hiện tại:</b> <b>${role}</b>\n\n` +
+      `💡 <i>Để trở thành Developer (nhận làm tool), hãy sao chép ID <code>${userId}</code> và thêm vào sheet 'Admins' nhé!</i>`;
+    sendTelegramMessage(chatId, infoMsg, msg.message_id);
+    return { success: true, userId, role };
+  }
+
   return { success: false, error: "UNKNOWN_COMMAND" };
 }
 
@@ -912,7 +1238,19 @@ function handleTelegramCallbackQuery(cb, ss) {
   if (cbData.startsWith("vote_")) {
     const ideaId = parseInt(cbData.replace("vote_", ""));
     const res = handleVote(ideaId, cbUserId, cbUsername, chatId, messageId, ss);
-    if (cbId) answerCallbackQuery(cbId, res.action === "VOTE" ? `🎉 Bạn đã vote cho ý tưởng #${ideaId}!` : `↩️ Bạn đã rút lại vote.`, false);
+    if (cbId) {
+      if (!res.success) {
+        answerCallbackQuery(cbId, res.message || `⚠️ Không thể bình chọn: ${res.error}`, true);
+      } else {
+        answerCallbackQuery(
+          cbId,
+          res.action === "VOTE"
+            ? `🎉 Bạn đã Upvote cho ý tưởng #${ideaId}! (Hiện có ${res.currentVotes} phiếu)`
+            : `↩️ Bạn đã rút lại lượt vote cho ý tưởng #${ideaId}.`,
+          false
+        );
+      }
+    }
     return res;
   }
 
@@ -920,8 +1258,8 @@ function handleTelegramCallbackQuery(cb, ss) {
   if (cbData.startsWith("merge_vote_")) {
     const targetIdeaId = parseInt(cbData.replace("merge_vote_", ""));
     const voteRes = handleVote(targetIdeaId, cbUserId, cbUsername, chatId, messageId, ss);
-    sendTelegramMessage(chatId, `✅ Đã dồn phiếu Upvote thành công vào ý tưởng <b>#${targetIdeaId}</b>!`);
     if (cbId) answerCallbackQuery(cbId, `Đã dồn vote vào #${targetIdeaId}!`, false);
+    sendTelegramMessage(chatId, `✅ Đã dồn phiếu Upvote thành công vào ý tưởng <b>#${targetIdeaId}</b>!`);
     return { success: true, action: "MERGE_VOTE", targetIdeaId, voteRes };
   }
 
@@ -962,7 +1300,21 @@ function handleTelegramCallbackQuery(cb, ss) {
   if (cbData.startsWith("claim_task_")) {
     const ideaId = parseInt(cbData.replace("claim_task_", ""));
     const res = handleClaimTask(ideaId, cbUserId, cbUsername, chatId, messageId, ss);
-    if (cbId) answerCallbackQuery(cbId, res.success ? "🚀 Đã nhận task thành công!" : `⚠️ ${res.error}`, true);
+    if (cbId) {
+      if (res.success) {
+        answerCallbackQuery(cbId, "🚀 Chúc mừng! Bạn đã nhận phát triển ý tưởng này thành công. Hãy bắt tay vào làm nhé!", true);
+      } else if (res.error === "UNAUTHORIZED_ROLE") {
+        answerCallbackQuery(
+          cbId,
+          `⚠️ Bạn cần có vai trò Developer để nhận làm tool này.\n\nUser ID của bạn là: ${cbUserId}\nHãy nhờ Admin thêm ID này vào sheet 'Admins' để được cấp quyền Developer nhé!`,
+          true
+        );
+      } else if (res.error === "ALREADY_CLAIMED") {
+        answerCallbackQuery(cbId, "⚠️ Ý tưởng này đã được Developer khác nhận phát triển rồi!", true);
+      } else {
+        answerCallbackQuery(cbId, `⚠️ Không thể nhận task: ${res.error}`, true);
+      }
+    }
     return res;
   }
 
@@ -992,16 +1344,36 @@ function handleTelegramCallbackQuery(cb, ss) {
   // 11.7. Nút Treo Thưởng Bounty (R4)
   if (cbData.startsWith("bounty_")) {
     const ideaId = parseInt(cbData.replace("bounty_", ""));
-    const guideMsg = `💡 <b>TREO THƯỞNG CHO Ý TƯỞNG #${ideaId}</b>\n\nHãy dùng lệnh:\n<code>/bounty ${ideaId} 500000 VND Ủng hộ dev</code>\nhoặc\n<code>/bounty ${ideaId} 5 COFFEE Tặng dev ly cà phê</code>`;
-    sendTelegramMessage(chatId, guideMsg, messageId);
-    if (cbId) answerCallbackQuery(cbId, "Xem hướng dẫn treo thưởng!", false);
-    return;
+    // Phản hồi callback query ngay lập tức để dập tắt icon loading trên nút và mở hộp thoại thông báo
+    const alertText = `💰 HƯỚNG DẪN TREO THƯỞNG CHO Ý TƯỞNG #${ideaId}\n\n` +
+      `Gõ lệnh trong chat để tài trợ:\n` +
+      `• /bounty ${ideaId} 500000 VND Ủng hộ dev\n` +
+      `• /bounty ${ideaId} 5 COFFEE Mời dev cafe\n` +
+      `• /bounty ${ideaId} 50 USD\n\n` +
+      `Quỹ sẽ được tích lũy vào ý tưởng này!`;
+    if (cbId) answerCallbackQuery(cbId, alertText, true);
+
+    // Đồng thời gửi tin nhắn vào chat để người dùng tiện chạm sao chép
+    try {
+      const guideMsg = `💡 <b>HƯỚNG DẪN TREO THƯỞNG CHO Ý TƯỞNG #${ideaId}</b>\n\n` +
+        `Hãy sao chép và gửi một trong các lệnh sau vào chat:\n` +
+        `• <code>/bounty ${ideaId} 500000 VND Ủng hộ dev</code>\n` +
+        `• <code>/bounty ${ideaId} 5 COFFEE Mời dev cafe</code>`;
+      sendTelegramMessage(chatId, guideMsg, messageId);
+    } catch (e) {}
+    return { success: true, action: "BOUNTY_GUIDE", ideaId };
   }
 
   // 11.8. Callback Top & Stats
   if (cbData === "cmd_top") {
+    if (cbId) answerCallbackQuery(cbId, "Đang tải Top ý tưởng...");
     sendTopIdeasMessage(chatId, ss);
-    if (cbId) answerCallbackQuery(cbId, "");
+    return;
+  }
+
+  if (cbData === "cmd_stats") {
+    if (cbId) answerCallbackQuery(cbId, "Đang tải thống kê...");
+    sendStatsMessage(chatId, ss);
     return;
   }
 
@@ -1037,16 +1409,24 @@ function handleVote(ideaId, userId, username, chatId, msgId, ss) {
   const ideasData = ideasSheet.getDataRange().getValues();
   let targetRow = -1;
   let currentVotes = 0;
+  let authorUserId = "";
 
   for (let i = 1; i < ideasData.length; i++) {
     if (ideasData[i][0] == ideaId) {
       targetRow = i + 1;
+      authorUserId = ideasData[i][2];
       currentVotes = parseInt(ideasData[i][7]) || 0;
       break;
     }
   }
 
   if (targetRow === -1) return { success: false, error: "IDEA_NOT_FOUND" };
+
+  // 🛡️ Chống tác giả tự vote cho ý tưởng của chính mình (LOGIC-MED-01)
+  const allowSelfVote = getConfig("ALLOW_SELF_VOTE") === "true";
+  if (!allowSelfVote && authorUserId && userId && authorUserId.toString() === userId.toString() && authorUserId !== "WEB_ANON") {
+    return { success: false, error: "SELF_VOTE_NOT_ALLOWED", message: "Tác giả không được tự bình chọn cho ý tưởng của chính mình!" };
+  }
 
   let actionResult = "";
   if (alreadyVoted) {
@@ -1056,7 +1436,7 @@ function handleVote(ideaId, userId, username, chatId, msgId, ss) {
     actionResult = "UNVOTE";
     logAudit(userId, username, "UNVOTE", `Rút lại vote cho ý tưởng #${ideaId}`, targetSs);
   } else {
-    votesSheet.appendRow([new Date(), ideaId, userId, username, "UPVOTE"]);
+    votesSheet.appendRow([new Date(), ideaId, userId, sanitizeSheetValue(username), "UPVOTE"]);
     currentVotes += 1;
     ideasSheet.getRange(targetRow, 8).setValue(currentVotes);
     actionResult = "VOTE";
@@ -1106,11 +1486,10 @@ function handleClaimTask(ideaId, userId, username, chatId, msgId, ss) {
     return { success: false, error: "ALREADY_CLAIMED" };
   }
 
-  ideasSheet.getRange(targetRow, 11).setValue("Đang phát triển");
-  ideasSheet.getRange(targetRow, 13).setValue(userId);
-  ideasSheet.getRange(targetRow, 14).setValue(username);
-  ideasSheet.getRange(targetRow, 15).setValue(new Date());
-  ideasSheet.getRange(targetRow, 16).setValue("10% - Khởi động");
+  // Batch write 6 columns: Status (11), Notes (12), DevId (13), DevUsername (14), ClaimDate (15), Milestones (16) (CONC-MED-01)
+  ideasSheet.getRange(targetRow, 11, 1, 6).setValues([[
+    "Đang phát triển", "", userId, sanitizeSheetValue(username), new Date(), "10% - Khởi động"
+  ]]);
 
   logAudit(userId, username, "CLAIM_TASK", `Nhận phát triển ý tưởng #${ideaId}`, targetSs);
 
@@ -1168,11 +1547,10 @@ function handleUnclaimTask(ideaId, userId, username, chatId, msgId, ss) {
     return { success: false, error: "UNAUTHORIZED_UNCLAIM" };
   }
 
-  ideasSheet.getRange(targetRow, 11).setValue("Đang lấy ý kiến");
-  ideasSheet.getRange(targetRow, 13).setValue("");
-  ideasSheet.getRange(targetRow, 14).setValue("");
-  ideasSheet.getRange(targetRow, 15).setValue("");
-  ideasSheet.getRange(targetRow, 16).setValue("0%");
+  // Batch reset 6 columns (CONC-MED-01)
+  ideasSheet.getRange(targetRow, 11, 1, 6).setValues([[
+    "Đang lấy ý kiến", "", "", "", "", "0%"
+  ]]);
 
   logAudit(userId, username, "UNCLAIM_TASK", `Hủy nhận task ý tưởng #${ideaId}`, targetSs);
 
@@ -1201,9 +1579,14 @@ function handleDevStatusTransition(ideaId, userId, username, targetStatus, chatI
     return { success: false, error: "UNAUTHORIZED" };
   }
 
-  ideasSheet.getRange(targetRow, 11).setValue(targetStatus);
   const milestone = targetStatus === "Beta Testing" ? "80% - Đang thử nghiệm" : "100% - Đã xuất bản";
-  ideasSheet.getRange(targetRow, 16).setValue(milestone);
+  const existingDevUser = ideasData[targetRow - 1][13] || "";
+  const existingClaimDate = ideasData[targetRow - 1][14] || "";
+
+  // Batch update status & milestone (CONC-MED-01)
+  ideasSheet.getRange(targetRow, 11, 1, 6).setValues([[
+    targetStatus, "", devId, existingDevUser, existingClaimDate, milestone
+  ]]);
 
   // Kích hoạt R3 Targeted Beta Notifications
   const notifyRes = notifyIdeaVoters(ideaId, targetStatus, {}, targetSs);
@@ -1400,18 +1783,36 @@ function answerCallbackQuery(callbackQueryId, text, showAlert) {
   return callTelegramApi("answerCallbackQuery", payload);
 }
 
-function callTelegramApi(endpoint, payload) {
+function callTelegramApi(endpoint, payload, maxRetries = 2) {
   const options = {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   };
-  try {
-    const response = UrlFetchApp.fetch(getTelegramApiUrl() + "/" + endpoint, options);
-    return JSON.parse(response.getContentText());
-  } catch (e) {
-    Logger.log(`Lỗi gọi Telegram API [${endpoint}]: ` + e.message);
-    return null;
+  const url = getTelegramApiUrl() + "/" + endpoint;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(url, options);
+      const code = (response && response.getResponseCode) ? response.getResponseCode() : 200;
+      const text = (response && response.getContentText) ? response.getContentText() : "{}";
+      const json = JSON.parse(text);
+
+      // Xử lý Telegram 429 Flood Control (CONC-HIGH-04)
+      if (code === 429 || (json && json.error_code === 429)) {
+        const retryAfter = (json.parameters && json.parameters.retry_after) ? json.parameters.retry_after : 1;
+        Logger.log(`⚠️ Telegram 429 Flood Control: retry after ${retryAfter}s`);
+        if (typeof Utilities !== "undefined" && Utilities.sleep) {
+          Utilities.sleep(Math.min(retryAfter * 1000 + 50, 2000));
+        }
+        continue;
+      }
+      return json;
+    } catch (e) {
+      Logger.log(`Lỗi gọi Telegram API [${endpoint}] lần ${attempt}: ` + e.message);
+      if (attempt === maxRetries) return null;
+    }
   }
+  return null;
 }

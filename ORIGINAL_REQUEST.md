@@ -1,47 +1,33 @@
-# Original User Request
+﻿# Original User Request
 
-## Initial Request — 2026-08-28T10:41:21Z
+## 2026-09-02T16:11:23Z
 
-ToolHunt Enterprise: Mở rộng hệ thống quản lý và bình chọn ý tưởng công nghệ ToolHunt lên cấp độ chuyên nghiệp dành cho doanh nghiệp và cộng đồng công nghệ, tích hợp AI Duplicate Detection (hỗ trợ DeepSeek & Gemini), Developer Task Claiming, Targeted Beta Notifications và Quỹ thưởng Tool Bounty.
+Thực hiện rà soát, kiểm toán toàn diện mã nguồn và kiến trúc dự án ToolHunt Enterprise nhằm phát hiện toàn bộ các lỗ hổng bảo mật, lỗi logic/concurrency, rủi ro giới hạn tài nguyên Google Apps Script và lỗ hổng xác thực Telegram WebApp, đồng thời xuất bản báo cáo kiểm toán chi tiết có phân loại mức độ nghiêm trọng và giải pháp khắc phục.
 
-Working directory: d:/Profile/AutoFillSheet
+Working directory: c:/Users/Admin/Desktop/Projects/Tools/ToolHunt
 Integrity mode: development
 
 ## Requirements
 
-### R1. AI Duplicate Detection (Harnessing DeepSeek & Gemini)
-- Tích hợp lớp kiểm tra ngữ nghĩa thông minh bằng AI (hỗ trợ linh hoạt DeepSeek API hoặc Google Gemini API miễn phí) khi thành viên gửi ý tưởng mới qua bot hoặc Mini App.
-- Tự động đối chiếu ý tưởng mới với cơ sở dữ liệu các ý tưởng hiện có trong Google Sheets.
-- Nếu phát hiện độ tương đồng cao (trên ngưỡng cấu hình), bot đưa ra cảnh báo và danh sách các ý tưởng liên quan kèm nút dồn vote nhanh hoặc xác nhận tiếp tục tạo mới.
+### R1. Kiểm toán bảo mật và xác thực (Security & Authentication Audit)
+Rà soát toàn diện cơ chế bảo mật bao gồm: bảo vệ secret/API token (Bot Token, AI Keys), xác thực chữ ký Webhook (X-Telegram-Bot-Api-Secret-Token), cơ chế xác thực danh tính người dùng từ Telegram WebApp (initData HMAC-SHA256 validation), và khả năng lọc dữ liệu đầu vào chống XSS/HTML Injection trên cả Bot và Web Dashboard.
 
-### R2. Developer Task Claiming & Workflow Lifecycle
-- Bổ sung nút hành động [ 🛠 Nhận làm tool ] (Claim Task) trên tin nhắn Telegram, Web Dashboard và Mini App.
-- Cho phép lập trình viên nhận phụ trách phát triển ý tưởng:
-  - Cập nhật trạng thái trực quan: 🚀 Đang phát triển bởi @username.
-  - Lưu trữ thông tin phân công, ngày bắt đầu và tiến độ mốc (Milestones) vào Google Sheet.
-  - Hỗ trợ đổi trạng thái sang 🧪 Beta Testing, ✅ Hoàn thành hoặc nhả task (Hủy nhận).
+### R2. Đánh giá khả năng mở rộng, đồng thời và giới hạn tài nguyên (Concurrency & Platform Limits Audit)
+Phân tích nguy cơ nghẽn khi có lượng truy cập tăng đột biến (burst traffic), cơ chế tranh chấp khóa LockService, rủi ro suy giảm hiệu năng khi dữ liệu Google Sheets tăng trưởng (quét toàn bộ bảng tính O(N)), và các rủi ro chạm trần hạn ngạch của Google Apps Script (giới hạn 6 phút thực thi, giới hạn gọi UrlFetchApp hàng ngày).
 
-### R3. Targeted Beta Tester Notifications
-- Tự động trích xuất danh sách tất cả người dùng (User IDs) đã từng Upvote cho một ý tưởng cụ thể từ sheet Votes.
-- Khi ý tưởng chuyển sang trạng thái 🧪 Beta Testing hoặc ✅ Hoàn thành, bot kích hoạt gửi tin nhắn thông báo tự động (Targeted Direct Message / Mention) đến đúng nhóm người dùng đã quan tâm này kèm link trải nghiệm và form đánh giá.
+### R3. Kiểm toán logic nghiệp vụ, máy trạng thái (FSM) và độ phủ kiểm thử
+Kiểm tra tính chặt chẽ của máy trạng thái vòng đời ý tưởng (FSM transitions: Claim, Beta, Complete, Unclaim), luồng AI phát hiện trùng lặp kết hợp failover/heuristic, cơ chế dồn vote và chống gian lận, quy trình quản lý/giải ngân quỹ Bounty đa tiền tệ, cùng tính toàn vẹn của các kịch bản kiểm thử giả lập hiện có.
 
-### R4. Tool Bounty & Crowdfunding Mechanism
-- Cung cấp tính năng đặt hàng / treo thưởng (Bounty: ngân sách, điểm thưởng, coffee ☕) cho các ý tưởng tool quan trọng.
-- Hiển thị huy hiệu Bounty và tổng giá trị thưởng nổi bật trên bài đăng Telegram và Web Dashboard.
-- Quản lý nhật ký đóng góp quỹ và phân bổ thưởng vào sheet Bounties.
-
-### R5. Enterprise Architecture & Dual-Platform Sync
-- Nâng cấp cấu trúc dữ liệu Google Sheets (Ideas, Votes, Bounties, Admins, Config) và REST API đáp ứng phân quyền doanh nghiệp (Member, Developer, Manager, Admin).
-- Đồng bộ toàn bộ cập nhật lên giao diện Web Dashboard / Telegram Mini App, bộ kiểm thử Unit Tests và kho mã nguồn GitHub https://github.com/tinycorn-studio/Tool-Hunt.git.
+### R4. Đánh giá tính sẵn sàng triển khai thực tế (Production Readiness & Documentation)
+Kiểm tra cấu hình phân quyền 4 cấp (RBAC), khả năng xử lý CORS/redirect của Web Dashboard khi kết nối với GAS Web App, tính đồng bộ của cấu hình ppsscript.json, và đối chiếu tính chính xác giữa mã nguồn với tài liệu hướng dẫn triển khai.
 
 ## Acceptance Criteria
 
-### Automated Verification & Simulation
-- [ ] Bộ kiểm thử tự động test_simulator.js mở rộng kiểm tra thành công 100% các kịch bản:
-  - AI semantic similarity detection (nhận diện chính xác ý tưởng trùng và không trùng).
-  - Luồng Developer Claim task, cập nhật tiến độ và nhả task.
-  - Luồng lọc danh sách voters và kích hoạt Targeted Notifications.
-  - Luồng tạo mới, tích lũy Bounty và hiển thị tổng quỹ.
-- [ ] Backend Google Apps Script (Code.js) xử lý đầy đủ các Callback actions, Webhook events và API endpoints mới mà không phát sinh lỗi runtime.
-- [ ] Web Dashboard (index.html, app.js, styles.css) hiển thị đầy đủ thông tin Developer phụ trách, huy hiệu Bounty và nút Claim Task tương tác mượt mà.
-- [ ] Toàn bộ mã nguồn mới, tài liệu hướng dẫn (README.md, docs/) được cập nhật và đẩy lên nhánh main của repository GitHub https://github.com/tinycorn-studio/Tool-Hunt.git.
+### Audit Report Deliverables
+- [ ] Báo cáo kiểm toán chi tiết được tạo và lưu trữ tại AUDIT_REPORT.md trong thư mục gốc của dự án.
+- [ ] Báo cáo phân loại các vấn đề tìm được theo 4 cấp độ nghiêm trọng tiêu chuẩn: Critical (Nghiêm trọng), High (Cao), Medium (Trung bình), Low (Thấp / Tối ưu hóa).
+- [ ] Mỗi phát hiện phải chỉ rõ bằng chứng cụ thể: đường dẫn file, đoạn mã nguồn liên quan, phân tích rủi ro thực tế kèm kịch bản chứng minh (PoC / Edge-case scenario).
+- [ ] Mỗi vấn đề đều đi kèm phương án khắc phục (Remediation) chi tiết, phù hợp với kiến trúc serverless của Google Apps Script và Telegram Bot API.
+
+### Integrity & Baseline Verification
+- [ ] Toàn bộ các bộ kiểm thử hiện có (scripts/test_simulator.js, scripts/test_adversarial_challenger.js, scripts/test_adversarial_challenger2.js) được chạy và xác nhận đạt 100% tỷ lệ pass không phát sinh lỗi hồi quy.

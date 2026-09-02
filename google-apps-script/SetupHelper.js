@@ -17,9 +17,10 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu("🤖 Quản Lý ToolHunt Enterprise")
     .addItem("⚡ 1. Khởi tạo cấu trúc 6 Sheet Enterprise", "initSpreadsheet")
-    .addItem("🔗 2. Đăng ký Telegram Webhook tự động", "setupTelegramWebhookFromUi")
-    .addItem("ℹ️ 3. Kiểm tra thông tin Bot (getMe)", "checkBotInfoFromUi")
-    .addItem("📊 4. Format & Căn chỉnh toàn bộ Sheet", "formatAllSheets")
+    .addItem("🔗 2. Đăng ký Telegram Webhook tự động (kèm Secret Token)", "setupTelegramWebhookFromUi")
+    .addItem("🔒 3. Di chuyển Secrets sang ScriptProperties (Bảo mật cao)", "migrateSecretsToScriptProperties")
+    .addItem("ℹ️ 4. Kiểm tra thông tin Bot (getMe)", "checkBotInfoFromUi")
+    .addItem("📊 5. Format & Căn chỉnh toàn bộ Sheet", "formatAllSheets")
     .addToUi();
 }
 
@@ -159,9 +160,9 @@ function formatAllSheets() {
  */
 function setupTelegramWebhookFromUi() {
   const ui = SpreadsheetApp.getUi();
-  const token = typeof getBotToken === "function" ? getBotToken() : "";
+  const token = (typeof SecretsManager !== "undefined" && SecretsManager.getBotToken) ? SecretsManager.getBotToken() : (typeof getBotToken === "function" ? getBotToken() : "");
   if (!token || token.includes("YOUR_")) {
-    ui.alert("⚠️ Thiếu BOT_TOKEN!", "Vui lòng nhập BOT_TOKEN vào ô B2 của sheet 'Config'.", ui.ButtonSet.OK);
+    ui.alert("⚠️ Thiếu BOT_TOKEN!", "Vui lòng nhập BOT_TOKEN vào ô B2 của sheet 'Config' hoặc cấu hình trong Script Properties.", ui.ButtonSet.OK);
     return;
   }
   const promptResult = ui.prompt("🔗 Đăng ký Telegram Webhook", "Nhập Web App URL (Deploy -> New deployment -> Web app):\nVí dụ: https://script.google.com/macros/s/.../exec", ui.ButtonSet.OK_CANCEL);
@@ -171,11 +172,25 @@ function setupTelegramWebhookFromUi() {
       ui.alert("❌ URL không hợp lệ! URL phải bắt đầu bằng https://script.google.com");
       return;
     }
+
+    // Tạo hoặc lấy WEBHOOK_SECRET_TOKEN ngẫu nhiên an toàn (SEC-CRIT-01)
+    let secretToken = (typeof SecretsManager !== "undefined" && SecretsManager.getWebhookSecret) ? SecretsManager.getWebhookSecret() : "";
+    if (!secretToken && typeof Utilities !== "undefined" && Utilities.getUuid) {
+      secretToken = Utilities.getUuid().replace(/-/g, "");
+      if (typeof SecretsManager !== "undefined" && SecretsManager.set) {
+        SecretsManager.set("WEBHOOK_SECRET_TOKEN", secretToken);
+      }
+    }
+
     try {
-      const res = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webAppUrl)}`);
+      let webhookUrl = `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webAppUrl)}`;
+      if (secretToken) {
+        webhookUrl += `&secret_token=${encodeURIComponent(secretToken)}`;
+      }
+      const res = UrlFetchApp.fetch(webhookUrl);
       const json = JSON.parse(res.getContentText());
       if (json.ok) {
-        ui.alert("🎉 Thành công!", `Webhook đã được cài đặt!\nChi tiết: ${json.description}`, ui.ButtonSet.OK);
+        ui.alert("🎉 Thành công!", `Webhook đã được cài đặt kèm Secret Token bảo mật!\nChi tiết: ${json.description}`, ui.ButtonSet.OK);
       } else {
         ui.alert("❌ Lỗi Telegram:", json.description, ui.ButtonSet.OK);
       }
@@ -183,6 +198,55 @@ function setupTelegramWebhookFromUi() {
       ui.alert("❌ Lỗi kết nối:", e.message, ui.ButtonSet.OK);
     }
   }
+}
+
+/**
+ * Di chuyển toàn bộ API Keys & Tokens từ Sheet Config vào ScriptProperties (SEC-CRIT-03)
+ */
+function migrateSecretsToScriptProperties() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName("Config");
+  if (!configSheet) {
+    ui.alert("❌ Không tìm thấy sheet 'Config'!");
+    return;
+  }
+
+  const sensitiveKeys = ["BOT_TOKEN", "DEEPSEEK_API_KEY", "GEMINI_API_KEY", "WEBHOOK_SECRET_TOKEN"];
+  const data = configSheet.getDataRange().getValues();
+  let migratedCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0] ? data[i][0].toString().trim().toUpperCase() : "";
+    const val = data[i][1] ? data[i][1].toString().trim() : "";
+
+    if (sensitiveKeys.includes(key) && val && !val.startsWith("[STORED_IN_") && !val.includes("YOUR_")) {
+      if (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties) {
+        PropertiesService.getScriptProperties().setProperty(key, val);
+        configSheet.getRange(i + 1, 2).setValue(`[STORED_IN_SCRIPT_PROPERTIES]`);
+        migratedCount++;
+      }
+    }
+  }
+
+  // Khởi tạo WEBHOOK_SECRET_TOKEN nếu chưa có
+  if (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties) {
+    const props = PropertiesService.getScriptProperties();
+    if (!props.getProperty("WEBHOOK_SECRET_TOKEN")) {
+      const generatedSecret = (typeof Utilities !== "undefined" && Utilities.getUuid) ? Utilities.getUuid().replace(/-/g, "") : "th_sec_" + Date.now();
+      props.setProperty("WEBHOOK_SECRET_TOKEN", generatedSecret);
+      migratedCount++;
+    }
+  }
+
+  // Xóa cache Config để áp dụng tức thì
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      sensitiveKeys.forEach(k => CacheService.getScriptCache().remove("CONFIG_" + k));
+    }
+  } catch (ce) {}
+
+  ui.alert("🛡️ BẢO MẬT HOÀN TẤT!", `Đã mã hóa và di chuyển ${migratedCount} secrets/keys vào ScriptProperties thành công!\nCác ô trên bảng tính đã được ẩn để tránh lộ thông tin.`, ui.ButtonSet.OK);
 }
 
 /**

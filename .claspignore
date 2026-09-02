@@ -1,0 +1,7 @@
+# Ignore all files by default
+**/**
+
+# Allow only Google Apps Script source files
+!Code.js
+!SetupHelper.js
+!appsscript.json

@@ -13,9 +13,18 @@
   "homepage": "https://github.com/tinycorn-studio/Tool-Hunt#readme",
   "scripts": {
     "test": "node scripts/test_simulator.js",
+    "test:adversarial": "node scripts/test_adversarial_challenger.js && node scripts/test_adversarial_challenger2.js",
+    "test:remediation": "node scripts/test_remediation_verifier.js",
+    "test:all": "node scripts/test_simulator.js && node scripts/test_adversarial_challenger.js && node scripts/test_adversarial_challenger2.js && node scripts/test_remediation_verifier.js",
     "setup": "node scripts/setup_webhook.js",
     "setup:py": "python scripts/setup_webhook.py",
-    "dashboard": "npx serve web-dashboard -p 3000"
+    "dashboard": "npx serve web-dashboard -p 3000",
+    "gas:login": "clasp login",
+    "gas:push": "clasp push",
+    "gas:pull": "clasp pull",
+    "gas:watch": "clasp push --watch",
+    "gas:status": "clasp status",
+    "gas:deploy": "clasp deploy -i AKfycbx_kDAFAovruLFBQnxLAKie3raxP2IzL1HM9HWZXoB1hkbw6ouWlzlXxPJ49DrV0f8o"
   },
   "keywords": [
     "tool-hunt",
@@ -28,5 +37,8 @@
     "serverless"
   ],
   "author": "Tinycorn Studio",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
+  }
 }

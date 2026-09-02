@@ -13,6 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const crypto = require("crypto");
 
 // ==============================================================================
 // 1. MOCK GAS INFRASTRUCTURE FOR ADVERSARIAL TESTING
@@ -344,6 +345,39 @@ class MockCacheService {
   }
 }
 
+class MockPropertiesService {
+  constructor() {
+    this.store = {};
+  }
+  getScriptProperties() {
+    const self = this;
+    return {
+      getProperty: (k) => self.store[k] !== undefined ? self.store[k] : null,
+      setProperty: (k, v) => { self.store[k] = String(v); },
+      setProperties: (obj) => { Object.assign(self.store, obj); },
+      deleteAllProperties: () => { self.store = {}; }
+    };
+  }
+}
+
+const MockUtilities = {
+  computeHmacSha256Signature: (value, key) => {
+    const keyBuf = Buffer.isBuffer(key) ? key : Buffer.from(key, "utf8");
+    const hmac = crypto.createHmac("sha256", keyBuf);
+    hmac.update(Buffer.from(value, "utf8"));
+    const digest = hmac.digest();
+    const signedBytes = [];
+    for (let i = 0; i < digest.length; i++) {
+      let b = digest[i];
+      if (b > 127) b = b - 256;
+      signedBytes.push(b);
+    }
+    return signedBytes;
+  },
+  sleep: (ms) => {},
+  getUuid: () => crypto.randomUUID ? crypto.randomUUID() : "mock-uuid-1234"
+};
+
 // Load Code.js and SetupHelper.js into sandboxed GAS environment
 function loadCodeJsSandbox() {
   const ss = new MockSpreadsheetApp();
@@ -351,6 +385,7 @@ function loadCodeJsSandbox() {
   const lock = new MockLockService();
   const content = new MockContentService();
   const cache = new MockCacheService();
+  const properties = new MockPropertiesService();
   const loggerLogs = [];
 
   const sandbox = {
@@ -359,6 +394,8 @@ function loadCodeJsSandbox() {
     LockService: lock,
     ContentService: content,
     CacheService: cache,
+    PropertiesService: properties,
+    Utilities: MockUtilities,
     Logger: {
       log: (msg) => loggerLogs.push(msg)
     },
