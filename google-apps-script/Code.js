@@ -803,6 +803,21 @@ function doGet(e) {
   }
 }
 
+function isStateMutatingRequest(contents) {
+  if (contents.apiAction) {
+    return ["submitIdea", "voteIdea", "claimIdea", "unclaimIdea", "updateProgress", "pledgeBounty"].includes(contents.apiAction);
+  }
+  if (contents.callback_query) {
+    return true; // Callback queries (vote, claim, bounty) thường thay đổi dữ liệu
+  }
+  const msg = contents.message || contents.channel_post;
+  if (msg && msg.text) {
+    const text = msg.text.trim();
+    return text.startsWith("/idea") || text.startsWith("/claim") || text.startsWith("/bounty") || text.startsWith("/status");
+  }
+  return false;
+}
+
 // ==============================================================================
 // 8. REST API: POST ROUTER & WEBHOOK (doPost)
 // ==============================================================================
@@ -821,7 +836,7 @@ function doPost(e) {
     }
 
     // 🛡️ ANTI-DUPLICATE WEBHOOK RETRY GUARD:
-    // Nếu Telegram retry gửi lại cùng 1 update_id, lập tức bỏ qua và phản hồi ngay để dập tắt spam!
+    // Tăng thời gian lưu update_id lên 21600s (6 giờ) để dập tắt triệt để vòng lặp 5 phút của Telegram
     if (contents.update_id) {
       try {
         if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
@@ -831,30 +846,35 @@ function doPost(e) {
             if (cache.get(cacheKey)) {
               return createJsonResponse({ ok: true });
             }
-            cache.put(cacheKey, "1", 300);
+            cache.put(cacheKey, "1", 21600);
           }
         }
       } catch (cacheErr) {}
     }
 
-    // 🛡️ Fail-Fast Lock Mutex (CONC-CRIT-01)
-    const lock = LockService.getScriptLock();
+    // ⚡ TỐI ƯU HIỆU NĂNG: Chỉ acquire LockService đối với các tác vụ ghi/thay đổi dữ liệu
+    // Các lệnh đọc (/top, /help, /start, /stats, /myideas) chạy trực tiếp trong <1s để tránh Telegram timeout
+    const needsLock = isStateMutatingRequest(contents);
+    const lock = needsLock ? LockService.getScriptLock() : null;
     let hasLock = false;
-    try {
-      hasLock = lock.tryLock ? lock.tryLock(10000) : (lock.waitLock(10000), true);
-      if (!hasLock) {
+
+    if (lock) {
+      try {
+        hasLock = lock.tryLock ? lock.tryLock(10000) : (lock.waitLock(10000), true);
+        if (!hasLock) {
+          return createJsonResponse({
+            ok: false,
+            error: "SERVER_BUSY",
+            message: "Hệ thống đang xử lý nhiều tác vụ đồng thời. Vui lòng thử lại sau giây lát."
+          });
+        }
+      } catch (err) {
         return createJsonResponse({
           ok: false,
           error: "SERVER_BUSY",
-          message: "Hệ thống đang xử lý nhiều tác vụ đồng thời. Vui lòng thử lại sau giây lát."
+          message: "Không thể lấy khóa đồng thời: " + err.message
         });
       }
-    } catch (err) {
-      return createJsonResponse({
-        ok: false,
-        error: "SERVER_BUSY",
-        message: "Không thể lấy khóa đồng thời: " + err.message
-      });
     }
 
     try {
@@ -877,7 +897,7 @@ function doPost(e) {
 
       return createJsonResponse({ ok: true });
     } finally {
-      if (hasLock) {
+      if (hasLock && lock) {
         try {
           lock.releaseLock();
         } catch (e) {}
@@ -1671,25 +1691,42 @@ function formatTelegramCard(idea) {
 }
 
 function sendTopIdeasMessage(chatId, ss, replyToMsgId) {
-  const targetSs = ss || SpreadsheetApp.getActiveSpreadsheet();
-  const ideasSheet = targetSs.getSheetByName("Ideas");
-  if (!ideasSheet || ideasSheet.getLastRow() <= 1) {
-    sendTelegramMessage(chatId, "Chưa có ý tưởng nào được đề xuất.", replyToMsgId);
-    return;
+  const cacheKey = "CACHE_TOP_IDEAS_MSG";
+  let msg = "";
+  try {
+    if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+      msg = CacheService.getScriptCache().get(cacheKey) || "";
+    }
+  } catch (e) {}
+
+  if (!msg) {
+    const targetSs = ss || SpreadsheetApp.getActiveSpreadsheet();
+    const ideasSheet = targetSs.getSheetByName("Ideas");
+    if (!ideasSheet || ideasSheet.getLastRow() <= 1) {
+      sendTelegramMessage(chatId, "Chưa có ý tưởng nào được đề xuất.", replyToMsgId);
+      return;
+    }
+
+    const data = ideasSheet.getDataRange().getValues().slice(1);
+    const list = data.map(r => ({ id: r[0], title: r[4], votes: parseInt(r[7]) || 0, author: r[3], status: r[10] || "Đang lấy ý kiến" }));
+    list.sort((a, b) => b.votes - a.votes);
+    const topList = list.slice(0, 5);
+
+    const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
+    msg = `🔥 <b>TOP Ý TƯỞNG ĐƯỢC QUAN TÂM NHẤT:</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    topList.forEach((item, index) => {
+      msg += `${medals[index] || "🔹"} <b>#${item.id} - ${escapeHtml(item.title)}</b>\n` +
+        `   👍 <b>${item.votes} votes</b> | 👤 ${item.author} | <code>${item.status}</code>\n\n`;
+    });
+    msg += `━━━━━━━━━━━━━━━━━━━━━━\n💡 Gõ <code>/idea [Tên] | [Mô tả]</code> để gửi thêm ý tưởng mới!`;
+
+    try {
+      if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+        CacheService.getScriptCache().put(cacheKey, msg, 60); // Cache 60s
+      }
+    } catch (e) {}
   }
 
-  const data = ideasSheet.getDataRange().getValues().slice(1);
-  const list = data.map(r => ({ id: r[0], title: r[4], votes: parseInt(r[7]) || 0, author: r[3], status: r[10] || "Đang lấy ý kiến" }));
-  list.sort((a, b) => b.votes - a.votes);
-  const topList = list.slice(0, 5);
-
-  const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
-  let msg = `🔥 <b>TOP Ý TƯỞNG ĐƯỢC QUAN TÂM NHẤT:</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-  topList.forEach((item, index) => {
-    msg += `${medals[index] || "🔹"} <b>#${item.id} - ${escapeHtml(item.title)}</b>\n` +
-      `   👍 <b>${item.votes} votes</b> | 👤 ${item.author} | <code>${item.status}</code>\n\n`;
-  });
-  msg += `━━━━━━━━━━━━━━━━━━━━━━\n💡 Gõ <code>/idea [Tên] | [Mô tả]</code> để gửi thêm ý tưởng mới!`;
   sendTelegramMessage(chatId, msg, replyToMsgId);
 }
 
