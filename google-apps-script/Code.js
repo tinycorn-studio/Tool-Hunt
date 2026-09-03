@@ -635,6 +635,29 @@ function handlePledgeBounty(ideaId, userId, username, amount, unit, message, cha
 
   logAudit(userId, username, "PLEDGE_BOUNTY", `Tài trợ ${amount} ${unit} cho ý tưởng #${ideaId}`, targetSs);
 
+  // 🔔 SMART MULTI-CHANNEL: Gửi DM thông báo tài trợ cho Tác giả & Developer
+  try {
+    const targetRowData = ideasData[targetRow - 1];
+    const authorUserId = targetRowData[2];
+    const devUserId = targetRowData[12];
+    const ideaTitle = targetRowData[4];
+
+    const bountyDm = `💰 <b>[Ý TƯỞNG NHẬN ĐƯỢC TÀI TRỢ MỚI!]</b>\n\n` +
+      `Nhà tài trợ <b>${escapeHtml(username)}</b> vừa ủng hộ <b>${amount.toLocaleString("vi-VN")} ${unit}</b> cho ý tưởng <b>#${ideaId}: ${escapeHtml(ideaTitle)}</b>!\n` +
+      (message ? `💬 Lời nhắn: <i>${escapeHtml(message)}</i>\n\n` : `\n`) +
+      `✨ ${bountyCalc.badgeText}\n` +
+      `Cảm ơn sự đóng góp quý báu của cộng đồng!`;
+
+    if (authorUserId && authorUserId.toString().length > 3 && authorUserId.toString() !== userId.toString()) {
+      sendTelegramMessage(authorUserId, bountyDm);
+    }
+    if (devUserId && devUserId.toString().length > 3 && devUserId.toString() !== authorUserId.toString() && devUserId.toString() !== userId.toString()) {
+      sendTelegramMessage(devUserId, bountyDm);
+    }
+  } catch (notifyErr) {
+    Logger.log("Lỗi gửi DM Bounty: " + notifyErr.message);
+  }
+
   return {
     success: true,
     bountyId: nextBountyId,
@@ -672,6 +695,10 @@ function doGet(e) {
       for (let i = 1; i < data.length; i++) {
         const row = data[i];
         if (!row[0]) continue;
+        const rowStatus = row[10] || "Đang lấy ý kiến";
+        if (["Đã ẩn", "Spam", "Đã xóa"].includes(rowStatus) && params.includeHidden !== "true") {
+          continue;
+        }
 
         ideas.push({
           id: row[0],
@@ -813,7 +840,7 @@ function isStateMutatingRequest(contents) {
   const msg = contents.message || contents.channel_post;
   if (msg && msg.text) {
     const text = msg.text.trim();
-    return text.startsWith("/idea") || text.startsWith("/claim") || text.startsWith("/bounty") || text.startsWith("/status");
+    return text.startsWith("/idea") || text.startsWith("/claim") || text.startsWith("/bounty") || text.startsWith("/status") || text.startsWith("/delete") || text.startsWith("/setrole") || text.startsWith("/broadcast");
   }
   return false;
 }
@@ -1226,6 +1253,41 @@ function handleTelegramMessage(msg, ss) {
     return updateIdeaStatus(targetId, newStatus, ss, chatId, msg.message_id, userId, username);
   }
 
+  // Lệnh: /delete [ID] [Lý do] (Soft Delete)
+  if (text.startsWith("/delete")) {
+    const raw = text.replace("/delete", "").trim();
+    const parts = raw.split(" ");
+    const ideaId = parseInt(parts[0]);
+    if (!ideaId) {
+      sendTelegramMessage(chatId, "⚠️ Cú pháp: <code>/delete [ID] [Lý do gỡ bỏ]</code>\nVí dụ: <code>/delete 1 Đăng trùng lặp / Nội dung spam</code>", msg.message_id);
+      return { success: false, error: "INVALID_SYNTAX" };
+    }
+    const reason = parts.slice(1).join(" ").trim() || "Gỡ bỏ theo yêu cầu";
+    return handleDeleteIdea(ideaId, reason, userId, username, chatId, msg.message_id, ss);
+  }
+
+  // Lệnh Admin: /setrole [userId/@username] [Developer/Manager/Admin/Member]
+  if (text.startsWith("/setrole")) {
+    const args = text.replace("/setrole", "").trim().split(" ");
+    if (args.length < 2) {
+      sendTelegramMessage(chatId, "⚠️ Cú pháp: <code>/setrole [User_ID hoặc @username] [Developer/Manager/Admin/Member]</code>\nVí dụ: <code>/setrole @dev_pro Developer</code>", msg.message_id);
+      return { success: false, error: "INVALID_SYNTAX" };
+    }
+    const targetUser = args[0].trim();
+    const newRole = args[1].trim();
+    return handleSetRole(targetUser, newRole, userId, username, chatId, msg.message_id, ss);
+  }
+
+  // Lệnh Admin: /broadcast [Nội dung]
+  if (text.startsWith("/broadcast")) {
+    const content = text.replace("/broadcast", "").trim();
+    if (!content) {
+      sendTelegramMessage(chatId, "⚠️ Cú pháp: <code>/broadcast [Nội dung phát tin chính thức]</code>", msg.message_id);
+      return { success: false, error: "INVALID_SYNTAX" };
+    }
+    return handleBroadcastMessage(content, userId, username, chatId, msg.message_id, ss);
+  }
+
   // Lệnh: /myid hoặc /whoami (Kiểm tra Telegram ID và phân quyền)
   if (text.startsWith("/myid") || text.startsWith("/whoami")) {
     const role = getUserRole(userId, ss);
@@ -1233,7 +1295,7 @@ function handleTelegramMessage(msg, ss) {
       `• <b>User ID:</b> <code>${userId}</code>\n` +
       `• <b>Tên hiển thị:</b> ${escapeHtml(username)}\n` +
       `• <b>Vai trò hiện tại:</b> <b>${role}</b>\n\n` +
-      `💡 <i>Để trở thành Developer (nhận làm tool), hãy sao chép ID <code>${userId}</code> và thêm vào sheet 'Admins' nhé!</i>`;
+      `💡 <i>Để trở thành Developer (nhận làm tool), hãy nhờ Admin cấp quyền qua lệnh <code>/setrole ${userId} Developer</code>!</i>`;
     sendTelegramMessage(chatId, infoMsg, msg.message_id);
     return { success: true, userId, role };
   }
@@ -1491,9 +1553,16 @@ function handleClaimTask(ideaId, userId, username, chatId, msgId, ss) {
   let currentStatus = "";
   let existingDevId = "";
 
+  let authorUserId = "";
+  let authorUsername = "";
+  let ideaTitle = "";
+
   for (let i = 1; i < ideasData.length; i++) {
     if (ideasData[i][0] == ideaId) {
       targetRow = i + 1;
+      authorUserId = ideasData[i][2];
+      authorUsername = ideasData[i][3];
+      ideaTitle = ideasData[i][4];
       currentStatus = ideasData[i][10];
       existingDevId = ideasData[i][12];
       break;
@@ -1512,6 +1581,42 @@ function handleClaimTask(ideaId, userId, username, chatId, msgId, ss) {
   ]]);
 
   logAudit(userId, username, "CLAIM_TASK", `Nhận phát triển ý tưởng #${ideaId}`, targetSs);
+
+  // 🔔 SMART MULTI-CHANNEL: Gửi DM thông báo cho Tác giả & Nhóm Voters đã Upvote
+  try {
+    const safeTitle = escapeHtml(ideaTitle);
+    const safeDev = escapeHtml(username);
+
+    // 1. Thông báo riêng cho tác giả
+    if (authorUserId && authorUserId.toString().length > 3 && authorUserId.toString() !== userId.toString()) {
+      const authorDm = `🚀 <b>[THÔNG BÁO Ý TƯỞNG ĐÃ CÓ DEVELOPER!]</b>\n\n` +
+        `Chào <b>${escapeHtml(authorUsername || "bạn")}</b>, ý tưởng của bạn <b>#${ideaId}: ${safeTitle}</b> đã được Developer <b>${safeDev}</b> chính thức nhận phát triển!\n\n` +
+        `📍 Trạng thái: <code>Đang phát triển</code>\n` +
+        `Cùng đón chờ bản thử nghiệm sớm nhé!`;
+      sendTelegramMessage(authorUserId, authorDm);
+    }
+
+    // 2. Thông báo riêng cho cử tri đã Upvote
+    const votesSheet = targetSs.getSheetByName("Votes");
+    if (votesSheet) {
+      const vData = votesSheet.getDataRange().getValues();
+      const notifiedVoters = new Set();
+      for (let v = 1; v < vData.length; v++) {
+        if (vData[v][1] == ideaId && (vData[v][4] === "UPVOTE" || vData[v][4] === "VOTE")) {
+          const vUid = vData[v][2];
+          if (vUid && vUid.toString().length > 3 && vUid.toString() !== userId.toString() && vUid.toString() !== authorUserId.toString() && !notifiedVoters.has(vUid)) {
+            notifiedVoters.add(vUid);
+            const voterDm = `🚀 <b>[CẬP NHẬT Ý TƯỞNG BẠN QUAN TÂM]</b>\n\n` +
+              `Ý tưởng <b>#${ideaId}: ${safeTitle}</b> mà bạn từng bình chọn đã được Developer <b>${safeDev}</b> chính thức nhận làm!\n\n` +
+              `Chúng tôi sẽ gửi thông báo đến bạn ngay khi có bản dùng thử Beta.`;
+            sendTelegramMessage(vUid, voterDm);
+          }
+        }
+      }
+    }
+  } catch (claimNotifyErr) {
+    Logger.log("Lỗi gửi thông báo Claim: " + claimNotifyErr.message);
+  }
 
   const devKeyboard = {
     inline_keyboard: [
@@ -1663,6 +1768,259 @@ function updateIdeaStatus(ideaId, newStatus, ss, chatId, replyToMsgId, adminUser
   return { success: true, targetId: ideaId, newStatus };
 }
 
+function handleDeleteIdea(ideaId, reason, userId, username, chatId, replyToMsgId, ss) {
+  const targetSs = ss || SpreadsheetApp.getActiveSpreadsheet();
+  const ideasSheet = targetSs.getSheetByName("Ideas");
+  if (!ideasSheet) return { success: false, error: "SHEET_NOT_FOUND" };
+
+  const data = ideasSheet.getDataRange().getValues();
+  let foundRow = -1;
+  let title = "";
+  let authorUserId = "";
+  let authorUsername = "";
+  let currentStatus = "";
+  let originMsgId = null;
+  let originChatId = chatId;
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] == ideaId) {
+      foundRow = i + 1;
+      authorUserId = data[i][2];
+      authorUsername = data[i][3];
+      title = data[i][4];
+      originMsgId = data[i][8];
+      originChatId = data[i][9] || chatId;
+      currentStatus = data[i][10] || "Đang lấy ý kiến";
+      break;
+    }
+  }
+
+  if (foundRow === -1) {
+    sendTelegramMessage(chatId, `⚠️ Không tìm thấy ý tưởng có ID #${ideaId}.`, replyToMsgId);
+    return { success: false, error: "NOT_FOUND" };
+  }
+
+  // Phân quyền xóa mềm:
+  // 1. Admin hoặc Manager: toàn quyền xóa bất kỳ ý tưởng nào.
+  // 2. Tác giả (Author): chỉ được tự gỡ khi chưa ai nhận làm ("Đang lấy ý kiến").
+  const isAdminOrMgr = hasRole(userId, ["Admin", "Manager"], targetSs);
+  const isAuthor = (authorUserId && userId && authorUserId.toString() === userId.toString());
+
+  if (!isAdminOrMgr && !isAuthor) {
+    sendTelegramMessage(chatId, "⛔ Bạn không có quyền gỡ bỏ ý tưởng này.", replyToMsgId);
+    return { success: false, error: "UNAUTHORIZED" };
+  }
+
+  if (isAuthor && !isAdminOrMgr && currentStatus !== "Đang lấy ý kiến") {
+    sendTelegramMessage(chatId, `⚠️ Bạn không thể gỡ ý tưởng này vì đã có Developer nhận làm hoặc đang tiến hành (Trạng thái: <code>${currentStatus}</code>). Vui lòng liên hệ Admin/Manager.`, replyToMsgId);
+    return { success: false, error: "CANNOT_DELETE_CLAIMED_IDEA" };
+  }
+
+  const cleanReason = (reason || "Gỡ bỏ theo yêu cầu").trim();
+
+  // Soft delete: Cập nhật trạng thái thành "Đã ẩn"
+  ideasSheet.getRange(foundRow, 11).setValue("Đã ẩn");
+  ideasSheet.getRange(foundRow, 16).setValue(`Đã gỡ bỏ: ${cleanReason}`);
+
+  // Sửa bài đăng Telegram gốc
+  if (originMsgId) {
+    const deletedCardText = `⛔ <b>Ý TƯỞNG #${ideaId} ĐÃ ĐƯỢC GỠ BỎ</b>\n\n` +
+      `📝 <b>Tiêu đề:</b> <s>${escapeHtml(title)}</s>\n` +
+      `👤 <b>Đề xuất bởi:</b> ${escapeHtml(authorUsername)}\n` +
+      `⚠️ <b>Lý do:</b> <i>${escapeHtml(cleanReason)}</i>\n` +
+      `👮 <i>Thao tác bởi: ${escapeHtml(username)}</i>`;
+
+    try {
+      editTelegramMessageText(originChatId, originMsgId, deletedCardText, { inline_keyboard: [] });
+    } catch (e) {
+      Logger.log("Không thể sửa bài đăng cũ: " + e.message);
+    }
+  }
+
+  logAudit(userId, username, "SOFT_DELETE_IDEA", `Gỡ ý tưởng #${ideaId} (${title}) - Lý do: ${cleanReason}`, targetSs);
+  sendTelegramMessage(chatId, `✅ Đã gỡ bỏ thành công ý tưởng <b>#${ideaId} (${escapeHtml(title)})</b>!\nTrạng thái chuyển sang: <code>Đã ẩn</code>.`, replyToMsgId);
+
+  return { success: true, ideaId, newStatus: "Đã ẩn", reason: cleanReason };
+}
+
+function handleSetRole(targetInput, newRole, adminUserId, adminUsername, chatId, replyToMsgId, ss) {
+  const targetSs = ss || SpreadsheetApp.getActiveSpreadsheet();
+
+  // Chỉ Admin tối cao mới được cấp/đổi quyền
+  if (!hasRole(adminUserId, ["Admin"], targetSs)) {
+    sendTelegramMessage(chatId, "⛔ Chỉ có Quản trị viên (Admin) mới có quyền phân quyền người dùng.", replyToMsgId);
+    return { success: false, error: "UNAUTHORIZED" };
+  }
+
+  const validRoles = ["Member", "Developer", "Manager", "Admin"];
+  const formattedRole = validRoles.find(r => r.toLowerCase() === (newRole || "").toLowerCase());
+  if (!formattedRole) {
+    sendTelegramMessage(chatId, `⚠️ Vai trò không hợp lệ! Các vai trò được hỗ trợ: <code>${validRoles.join(", ")}</code>`, replyToMsgId);
+    return { success: false, error: "INVALID_ROLE" };
+  }
+
+  const cleanTarget = (targetInput || "").trim();
+  if (!cleanTarget) {
+    sendTelegramMessage(chatId, "⚠️ Cú pháp: <code>/setrole [Telegram_User_ID hoặc @username] [Developer/Manager/Admin/Member]</code>", replyToMsgId);
+    return { success: false, error: "INVALID_TARGET" };
+  }
+
+  const adminsSheet = targetSs.getSheetByName("Admins") || (typeof initSpreadsheet === "function" ? initSpreadsheet().getSheetByName("Admins") : null);
+  if (!adminsSheet) return { success: false, error: "SHEET_NOT_FOUND" };
+
+  const data = adminsSheet.getDataRange().getValues();
+  let foundRow = -1;
+  let targetUid = "";
+  let targetUname = "";
+
+  for (let i = 1; i < data.length; i++) {
+    const rowUid = (data[i][0] || "").toString().trim();
+    const rowUname = (data[i][1] || "").toString().trim().toLowerCase();
+    if (rowUid === cleanTarget || rowUname === cleanTarget.toLowerCase() || rowUname === ("@" + cleanTarget.toLowerCase())) {
+      foundRow = i + 1;
+      targetUid = rowUid;
+      targetUname = data[i][1];
+      break;
+    }
+  }
+
+  if (foundRow !== -1) {
+    adminsSheet.getRange(foundRow, 3).setValue(formattedRole);
+    adminsSheet.getRange(foundRow, 4).setValue("Active");
+  } else {
+    // Nếu chưa có, thêm dòng mới
+    const isNumericId = /^\d+$/.test(cleanTarget);
+    targetUid = isNumericId ? cleanTarget : "";
+    targetUname = isNumericId ? "@user" : (cleanTarget.startsWith("@") ? cleanTarget : "@" + cleanTarget);
+    adminsSheet.appendRow([
+      sanitizeSheetValue(targetUid),
+      sanitizeSheetValue(targetUname),
+      formattedRole,
+      "Active",
+      `Gán qua bot bởi ${adminUsername} lúc ${new Date().toISOString()}`
+    ]);
+  }
+
+  // Cập nhật Cache tức thì
+  if (targetUid) {
+    try {
+      if (typeof CacheService !== "undefined" && CacheService.getScriptCache) {
+        CacheService.getScriptCache().put("ROLE_" + targetUid, formattedRole, 600);
+      }
+    } catch (ce) {}
+  }
+
+  logAudit(adminUserId, adminUsername, "SET_ROLE", `Gán vai trò ${formattedRole} cho ${cleanTarget}`, targetSs);
+  sendTelegramMessage(chatId, `🎉 <b>PHÂN QUYỀN THÀNH CÔNG!</b>\n\n• Đối tượng: <code>${cleanTarget}</code>\n• Vai trò mới: <b>${formattedRole}</b>\n• Người thực hiện: ${escapeHtml(adminUsername)}`, replyToMsgId);
+
+  return { success: true, target: cleanTarget, role: formattedRole };
+}
+
+function handleBroadcastMessage(content, adminUserId, adminUsername, chatId, replyToMsgId, ss) {
+  const targetSs = ss || SpreadsheetApp.getActiveSpreadsheet();
+
+  // Chỉ Admin mới được phát tin Broadcast
+  if (!hasRole(adminUserId, ["Admin"], targetSs)) {
+    sendTelegramMessage(chatId, "⛔ Chỉ có Quản trị viên (Admin) mới có quyền phát tin toàn hệ thống (Broadcast).", replyToMsgId);
+    return { success: false, error: "UNAUTHORIZED" };
+  }
+
+  const cleanContent = (content || "").trim();
+  if (!cleanContent || cleanContent.length < 5) {
+    sendTelegramMessage(chatId, "⚠️ Cú pháp: <code>/broadcast [Nội dung thông báo chi tiết]</code>", replyToMsgId);
+    return { success: false, error: "INVALID_CONTENT" };
+  }
+
+  // Trích xuất danh sách tất cả các User IDs duy nhất
+  const recipientIds = new Set();
+
+  // Từ sheet Ideas
+  const ideasSheet = targetSs.getSheetByName("Ideas");
+  if (ideasSheet) {
+    const iData = ideasSheet.getDataRange().getValues();
+    for (let i = 1; i < iData.length; i++) {
+      const uid = parseInt(iData[i][2]);
+      if (!isNaN(uid) && uid > 1000) recipientIds.add(uid);
+      const devUid = parseInt(iData[i][12]);
+      if (!isNaN(devUid) && devUid > 1000) recipientIds.add(devUid);
+    }
+  }
+
+  // Từ sheet Votes
+  const votesSheet = targetSs.getSheetByName("Votes");
+  if (votesSheet) {
+    const vData = votesSheet.getDataRange().getValues();
+    for (let v = 1; v < vData.length; v++) {
+      const uid = parseInt(vData[v][2]);
+      if (!isNaN(uid) && uid > 1000) recipientIds.add(uid);
+    }
+  }
+
+  // Từ sheet Bounties
+  const bountiesSheet = targetSs.getSheetByName("Bounties");
+  if (bountiesSheet) {
+    const bData = bountiesSheet.getDataRange().getValues();
+    for (let b = 1; b < bData.length; b++) {
+      const uid = parseInt(bData[b][3]);
+      if (!isNaN(uid) && uid > 1000) recipientIds.add(uid);
+    }
+  }
+
+  // Từ sheet Admins
+  const adminsSheet = targetSs.getSheetByName("Admins");
+  if (adminsSheet) {
+    const aData = adminsSheet.getDataRange().getValues();
+    for (let a = 1; a < aData.length; a++) {
+      const uid = parseInt(aData[a][0]);
+      if (!isNaN(uid) && uid > 1000) recipientIds.add(uid);
+    }
+  }
+
+  const recipients = Array.from(recipientIds);
+  if (recipients.length === 0) {
+    sendTelegramMessage(chatId, "Chưa có thành viên nào trong cơ sở dữ liệu để gửi broadcast.", replyToMsgId);
+    return { success: true, count: 0 };
+  }
+
+  sendTelegramMessage(chatId, `🚀 <i>Đang tiến hành phát thông báo tới ${recipients.length} thành viên...</i>`, replyToMsgId);
+
+  const broadcastMsg = `📢 <b>[THÔNG BÁO TỪ BAN QUẢN TRỊ TOOLHUNT]</b>\n\n` +
+    `${escapeHtml(cleanContent)}\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `👮 <i>Người phát tin: ${escapeHtml(adminUsername)} (Ban Quản Trị)</i>`;
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let idx = 0; idx < recipients.length; idx++) {
+    const uid = recipients[idx];
+    try {
+      const res = sendTelegramMessage(uid, broadcastMsg);
+      if (res && res.ok) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+      if (typeof Utilities !== "undefined" && Utilities.sleep && idx > 0 && idx % 10 === 0) {
+        Utilities.sleep(50);
+      }
+    } catch (err) {
+      failCount++;
+    }
+  }
+
+  logAudit(adminUserId, adminUsername, "BROADCAST", `Phát tin tới ${recipients.length} người: ${cleanContent.substring(0, 50)}...`, targetSs);
+
+  const reportMsg = `✅ <b>HOÀN TẤT PHÁT TIN BROADCAST!</b>\n\n` +
+    `• Đã gửi thành công: <b>${successCount}</b> thành viên\n` +
+    `• Thất bại (đã chặn bot / lỗi): <b>${failCount}</b>\n` +
+    `• Tổng số người nhận: <b>${recipients.length}</b>`;
+
+  sendTelegramMessage(chatId, reportMsg, replyToMsgId);
+
+  return { success: true, total: recipients.length, successCount, failCount };
+}
+
 // ==============================================================================
 // 13. CÁC HÀM FORMATTING & TELEGRAM API WRAPPERS
 // ==============================================================================
@@ -1809,6 +2167,20 @@ function editMessageReplyMarkup(chatId, messageId, replyMarkup) {
     reply_markup: (typeof replyMarkup === "string") ? JSON.parse(replyMarkup) : replyMarkup
   };
   return callTelegramApi("editMessageReplyMarkup", payload);
+}
+
+function editTelegramMessageText(chatId, messageId, text, replyMarkup) {
+  const payload = {
+    chat_id: chatId,
+    message_id: messageId,
+    text: text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true
+  };
+  if (replyMarkup) {
+    payload.reply_markup = (typeof replyMarkup === "string") ? JSON.parse(replyMarkup) : replyMarkup;
+  }
+  return callTelegramApi("editMessageText", payload);
 }
 
 function answerCallbackQuery(callbackQueryId, text, showAlert) {

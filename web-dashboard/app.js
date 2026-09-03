@@ -261,6 +261,11 @@ function renderIdeas() {
   if (!container || !emptyState) return;
 
   let filtered = STATE.ideas.filter(idea => {
+    // Loại trừ các ý tưởng đã bị gỡ bỏ / ẩn
+    if (idea.status && (idea.status.includes("Đã ẩn") || idea.status.includes("Spam") || idea.status.includes("Đã xóa"))) {
+      return false;
+    }
+
     // Search
     const q = STATE.searchQuery.toLowerCase();
     const matchSearch = idea.title.toLowerCase().includes(q) ||

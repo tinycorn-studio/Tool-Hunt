@@ -13,9 +13,10 @@
   "homepage": "https://github.com/tinycorn-studio/Tool-Hunt#readme",
   "scripts": {
     "test": "node scripts/test_simulator.js",
+    "test:governance": "node scripts/test_admin_governance.js",
     "test:adversarial": "node scripts/test_adversarial_challenger.js && node scripts/test_adversarial_challenger2.js",
     "test:remediation": "node scripts/test_remediation_verifier.js",
-    "test:all": "node scripts/test_simulator.js && node scripts/test_adversarial_challenger.js && node scripts/test_adversarial_challenger2.js && node scripts/test_remediation_verifier.js",
+    "test:all": "node scripts/test_simulator.js && node scripts/test_admin_governance.js && node scripts/test_adversarial_challenger.js && node scripts/test_adversarial_challenger2.js && node scripts/test_remediation_verifier.js",
     "setup": "node scripts/setup_webhook.js",
     "setup:py": "python scripts/setup_webhook.py",
     "dashboard": "npx serve web-dashboard -p 3000",
